@@ -49,11 +49,26 @@ export type Driver = {
   status: string;
 };
 
+export type MaintenanceRecord = {
+  id: string;
+  vehicle_id: string;
+  plate_number: string;
+  vehicle_name: string;
+  service_date: string;
+  service_type: string;
+  status: string;
+  odometer: number;
+  cost: number;
+  vendor: string | null;
+  notes: string | null;
+};
+
 type DashboardData = {
   stats: { vehicles: number; available: number; service: number; pending: number; taxDue: number };
   vehicles: Vehicle[];
   requests: LoanRequest[];
   drivers: Driver[];
+  maintenance: MaintenanceRecord[];
 };
 
 let client: ReturnType<typeof neon> | null = null;
@@ -150,6 +165,8 @@ async function initialize() {
     next_service_date DATE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE maintenance_records ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Diajukan'`;
+  await sql`CREATE INDEX IF NOT EXISTS maintenance_vehicle_idx ON maintenance_records(vehicle_id)`;
 
   const [{ total }] = await sql`SELECT COUNT(*)::int AS total FROM vehicles` as unknown as Array<{ total: number }>;
   if (total === 0) await seedDemoData();
@@ -216,7 +233,7 @@ export async function getPublicData() {
 export async function getDashboardData(): Promise<DashboardData> {
   await ensureDatabase();
   const sql = db();
-  const [vehicles, requests, drivers, totals] = await Promise.all([
+  const [vehicles, requests, drivers, maintenance, totals] = await Promise.all([
     sql`SELECT id, plate_number, brand, model, category, body_type, year, displacement,
       assignee, usage, status, tax_due_date::text, tax_amount::int, plate_renewal_year, notes
       FROM vehicles ORDER BY category, brand, model` as unknown as Promise<Vehicle[]>,
@@ -226,6 +243,10 @@ export async function getDashboardData(): Promise<DashboardData> {
     sql`SELECT id, name, nip, position, unit, license_number, license_type,
       license_expiry::text, phone, photo_url, address, assigned_vehicle, status
       FROM drivers ORDER BY name` as unknown as Promise<Driver[]>,
+    sql`SELECT m.id, m.vehicle_id, v.plate_number, CONCAT(v.brand, ' ', v.model) AS vehicle_name,
+      m.service_date::text, m.service_type, m.status, m.odometer, m.cost::int, m.vendor, m.notes
+      FROM maintenance_records m JOIN vehicles v ON v.id = m.vehicle_id
+      ORDER BY m.service_date DESC, m.created_at DESC` as unknown as Promise<MaintenanceRecord[]>,
     sql`SELECT COUNT(*)::int AS vehicles,
       COUNT(*) FILTER (WHERE status = 'Tersedia')::int AS available,
       COUNT(*) FILTER (WHERE status = 'Servis')::int AS service,
@@ -243,6 +264,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     vehicles,
     requests,
     drivers,
+    maintenance,
   };
 }
 
@@ -313,6 +335,26 @@ export async function createDriver(input: Record<string, unknown>) {
     ${input.licenseNumber ? String(input.licenseNumber).trim() : null}, ${input.licenseType ? String(input.licenseType) : null},
     ${input.licenseExpiry ? String(input.licenseExpiry) : null}, ${input.phone ? String(input.phone).trim() : null},
     ${photoUrl}, ${input.address ? String(input.address).trim() : null}, ${status}
+  )`;
+  return { id };
+}
+
+export async function createMaintenanceRecord(input: Record<string, unknown>) {
+  for (const field of ["vehicleId", "serviceDate", "serviceType"]) {
+    if (typeof input[field] !== "string" || !input[field].trim()) throw new Error(`Kolom ${field} wajib diisi`);
+  }
+  const status = String(input.status || "Diajukan");
+  if (!["Diajukan", "Dijadwalkan", "Dikerjakan", "Selesai", "Dibatalkan"].includes(status)) throw new Error("Status pemeliharaan tidak valid");
+  const odometer = Math.max(0, Math.trunc(Number(input.odometer) || 0));
+  const cost = Math.max(0, Math.trunc(Number(input.cost) || 0));
+  await ensureDatabase();
+  const id = `MNT-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  await db()`INSERT INTO maintenance_records (
+    id, vehicle_id, service_date, service_type, status, odometer, cost, vendor, notes
+  ) VALUES (
+    ${id}, ${String(input.vehicleId)}, ${String(input.serviceDate)}, ${String(input.serviceType)},
+    ${status}, ${odometer}, ${cost}, ${input.vendor ? String(input.vendor).trim() : null},
+    ${input.notes ? String(input.notes).trim() : null}
   )`;
   return { id };
 }

@@ -1,13 +1,14 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import type { Driver, LoanRequest, Vehicle } from "../../db/queries";
+import type { Driver, LoanRequest, MaintenanceRecord, Vehicle } from "../../db/queries";
 
 type Data = {
   stats: { vehicles: number; available: number; service: number; pending: number; taxDue: number };
   vehicles: Vehicle[];
   requests: LoanRequest[];
   drivers: Driver[];
+  maintenance: MaintenanceRecord[];
 };
 
 const tabs = ["Ringkasan", "Kendaraan", "Pengemudi", "Permohonan", "Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person"] as const;
@@ -19,6 +20,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
   const [category, setCategory] = useState("Semua");
   const [showForm, setShowForm] = useState(false);
   const [showDriverForm, setShowDriverForm] = useState(false);
+  const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
   const [notice, setNotice] = useState("");
 
   const filteredVehicles = useMemo(() => data.vehicles.filter((vehicle) => {
@@ -42,6 +44,16 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Data pengemudi gagal disimpan.");
     setShowDriverForm(false);
+    window.location.reload();
+  }
+
+  async function addMaintenance(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const response = await fetch("/api/maintenance", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) return setNotice(result.error ?? "Data pemeliharaan gagal disimpan.");
+    setShowMaintenanceForm(false);
     window.location.reload();
   }
 
@@ -93,9 +105,11 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
         </section>}
         {tab === "Permohonan" && <RequestsPanel requests={data.requests} vehicles={data.vehicles} onDecision={decideRequest} />}
         {tab === "Pengemudi" && <DriversPanel drivers={data.drivers} onAdd={() => setShowDriverForm(true)} />}
-        {(["Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person"] as Tab[]).includes(tab) && <section className="admin-section admin-coming-soon"><span>SIMKEDIS</span><h2>Modul {tab}</h2><p>Navigasi sudah disiapkan mengikuti struktur pengelolaan kendaraan dinas. Data operasional modul ini dapat ditambahkan setelah format resminya diverifikasi.</p></section>}
+        {tab === "Pemeliharaan" && <MaintenancePanel records={data.maintenance} onAdd={() => setShowMaintenanceForm(true)} />}
+        {(["Bahan Bakar", "Jadwal KIR", "Kontak Person"] as Tab[]).includes(tab) && <section className="admin-section admin-coming-soon"><span>SIMKEDIS</span><h2>Modul {tab}</h2><p>Navigasi sudah disiapkan mengikuti struktur pengelolaan kendaraan dinas. Data operasional modul ini dapat ditambahkan setelah format resminya diverifikasi.</p></section>}
       </section>
       {showDriverForm && <DriverModal onClose={() => setShowDriverForm(false)} onSubmit={addDriver} />}
+      {showMaintenanceForm && <MaintenanceModal vehicles={data.vehicles} onClose={() => setShowMaintenanceForm(false)} onSubmit={addMaintenance} />}
     </main>
   );
 }
@@ -118,6 +132,15 @@ function DriverModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (ev
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driver-modal" role="dialog" aria-modal="true" aria-labelledby="driver-modal-title"><header><h2 id="driver-modal-title">Tambah Pengemudi</h2><button type="button" onClick={onClose} aria-label="Tutup formulir">×</button></header><form onSubmit={onSubmit}><div className="driver-form-grid"><label><span>Nama *</span><input name="name" required autoFocus placeholder="Budi Santoso" /></label><label><span>NIP</span><input name="nip" inputMode="numeric" placeholder="19850101 201001 1 001" /></label><label><span>Jabatan</span><input name="position" placeholder="Analis" /></label><label><span>Unit Kerja</span><input name="unit" placeholder="Bagian Umum" /></label><label><span>No. SIM</span><input name="licenseNumber" /></label><label><span>Jenis SIM</span><select name="licenseType" defaultValue="SIM B1"><option>SIM A</option><option>SIM B1</option><option>SIM B2</option><option>SIM C</option></select></label><label><span>Berlaku SIM</span><input name="licenseExpiry" type="date" /></label><label><span>No. HP</span><input name="phone" inputMode="tel" placeholder="0812..." /></label><label><span>Status</span><select name="status" defaultValue="Aktif"><option>Aktif</option><option>Tersedia</option><option>Bertugas</option><option>Libur</option><option>Tidak Aktif</option></select></label><label><span>URL Foto</span><input name="photoUrl" type="url" placeholder="https://..." /></label><label className="full-field"><span>Alamat</span><textarea name="address" rows={3} placeholder="Jl. ..." /></label></div><footer><button className="button modal-cancel" type="button" onClick={onClose}>Batal</button><button className="button modal-save" type="submit">Simpan</button></footer></form></section></div>;
 }
 
+function MaintenancePanel({ records, onAdd }: { records: MaintenanceRecord[]; onAdd: () => void }) {
+  return <section className="admin-section"><div className="section-tools"><div><h2>Riwayat pemeliharaan</h2><p>Servis, perbaikan, biaya, dan odometer armada.</p></div><button className="button button-dark" onClick={onAdd}>+ Tambah Pemeliharaan</button></div>{records.length ? <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Kendaraan</th><th>Tanggal</th><th>Jenis</th><th>Bengkel</th><th>Kilometer</th><th>Biaya</th><th>Status</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td><strong>{record.vehicle_name}</strong><small>{record.plate_number}</small></td><td>{formatDate(record.service_date)}</td><td>{record.service_type}</td><td>{record.vendor ?? "Belum ditentukan"}</td><td>{record.odometer.toLocaleString("id-ID")} km</td><td>{formatRupiah(record.cost)}</td><td><StatusPill value={record.status} /></td></tr>)}</tbody></table></div> : <div className="empty-admin-state"><strong>Belum ada riwayat pemeliharaan</strong><p>Tambahkan servis atau perbaikan kendaraan melalui tombol di atas.</p></div>}</section>;
+}
+
+function MaintenanceModal({ vehicles, onClose, onSubmit }: { vehicles: Vehicle[]; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const today = new Date().toISOString().slice(0, 10);
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driver-modal maintenance-modal" role="dialog" aria-modal="true" aria-labelledby="maintenance-modal-title"><header><h2 id="maintenance-modal-title">Tambah Pemeliharaan</h2><button type="button" onClick={onClose} aria-label="Tutup formulir">×</button></header><form onSubmit={onSubmit}><div className="driver-form-grid"><label><span>Kendaraan *</span><select name="vehicleId" required defaultValue=""><option value="" disabled>-- Pilih Kendaraan --</option>{vehicles.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.plate_number} · {vehicle.brand} {vehicle.model}</option>)}</select></label><label><span>Tanggal</span><input name="serviceDate" type="date" required defaultValue={today} /></label><label><span>Jenis</span><select name="serviceType" defaultValue="Servis Rutin"><option>Servis Rutin</option><option>Perbaikan</option><option>Ganti Oli</option><option>Ban</option><option>Kelistrikan</option><option>Body Repair</option><option>Lainnya</option></select></label><label><span>Status</span><select name="status" defaultValue="Diajukan"><option>Diajukan</option><option>Dijadwalkan</option><option>Dikerjakan</option><option>Selesai</option><option>Dibatalkan</option></select></label><label><span>Bengkel</span><input name="vendor" placeholder="Nama bengkel" /></label><label><span>Kilometer</span><input name="odometer" type="number" min="0" step="1" defaultValue="0" /></label><label><span>Biaya (Rp)</span><input name="cost" type="number" min="0" step="1" defaultValue="0" /></label><label className="full-field"><span>Deskripsi</span><textarea name="notes" rows={3} placeholder="Detail perbaikan..." /></label></div><footer><button className="button modal-cancel" type="button" onClick={onClose}>Batal</button><button className="button modal-save" type="submit">Simpan</button></footer></form></section></div>;
+}
+
 function VehicleForm({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   return <form className="vehicle-form" onSubmit={onSubmit}><label><span>Nomor polisi</span><input name="plateNumber" required /></label><label><span>Merek</span><input name="brand" required /></label><label><span>Model/tipe</span><input name="model" required /></label><label><span>Kategori</span><select name="category" required>{["Roda Dua", "Kendaraan Jabatan", "Layanan Tamu", "Operasional Biro"].map((v) => <option key={v}>{v}</option>)}</select></label><label><span>Jenis</span><input name="bodyType" placeholder="Sedan, Mini Bus…" /></label><label><span>Tahun</span><input name="year" type="number" min="1900" max="2100" /></label><label><span>Pengguna/unit</span><input name="assignee" /></label><label><span>Jatuh tempo pajak</span><input name="taxDueDate" type="date" /></label><label><span>Status</span><select name="status">{["Tersedia", "Dipakai", "Servis", "Tidak Aktif"].map((v) => <option key={v}>{v}</option>)}</select></label><label className="wide"><span>Keterangan</span><input name="notes" /></label><button className="button button-primary">Simpan kendaraan</button></form>;
 }
@@ -125,3 +148,4 @@ function VehicleForm({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElement
 function StatusPill({ value }: { value: string }) { return <span className={`status-pill status-${slug(value)}`}><i />{value}</span>; }
 function slug(value: string) { return value.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, ""); }
 function formatDate(value: string | null) { return value ? new Date(`${value}T00:00:00`).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "Belum diisi"; }
+function formatRupiah(value: number) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value); }
