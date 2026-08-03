@@ -63,12 +63,28 @@ export type MaintenanceRecord = {
   notes: string | null;
 };
 
+export type FuelRecord = {
+  id: string;
+  vehicle_id: string;
+  plate_number: string;
+  vehicle_name: string;
+  fill_date: string;
+  fuel_type: string;
+  station: string | null;
+  liters: number;
+  price_per_liter: number;
+  odometer: number;
+  receipt_url: string | null;
+  total_cost: number;
+};
+
 type DashboardData = {
   stats: { vehicles: number; available: number; service: number; pending: number; taxDue: number };
   vehicles: Vehicle[];
   requests: LoanRequest[];
   drivers: Driver[];
   maintenance: MaintenanceRecord[];
+  fuelRecords: FuelRecord[];
 };
 
 let client: ReturnType<typeof neon> | null = null;
@@ -167,6 +183,21 @@ async function initialize() {
   )`;
   await sql`ALTER TABLE maintenance_records ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Diajukan'`;
   await sql`CREATE INDEX IF NOT EXISTS maintenance_vehicle_idx ON maintenance_records(vehicle_id)`;
+  await sql`CREATE TABLE IF NOT EXISTS fuel_records (
+    id TEXT PRIMARY KEY,
+    vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+    fill_date DATE NOT NULL,
+    fuel_type TEXT NOT NULL,
+    station TEXT,
+    liters DOUBLE PRECISION NOT NULL DEFAULT 0,
+    price_per_liter BIGINT NOT NULL DEFAULT 0,
+    odometer INTEGER NOT NULL DEFAULT 0,
+    receipt_url TEXT,
+    total_cost BIGINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS fuel_vehicle_idx ON fuel_records(vehicle_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS fuel_date_idx ON fuel_records(fill_date)`;
 
   const [{ total }] = await sql`SELECT COUNT(*)::int AS total FROM vehicles` as unknown as Array<{ total: number }>;
   if (total === 0) await seedDemoData();
@@ -233,7 +264,7 @@ export async function getPublicData() {
 export async function getDashboardData(): Promise<DashboardData> {
   await ensureDatabase();
   const sql = db();
-  const [vehicles, requests, drivers, maintenance, totals] = await Promise.all([
+  const [vehicles, requests, drivers, maintenance, fuelRecords, totals] = await Promise.all([
     sql`SELECT id, plate_number, brand, model, category, body_type, year, displacement,
       assignee, usage, status, tax_due_date::text, tax_amount::int, plate_renewal_year, notes
       FROM vehicles ORDER BY category, brand, model` as unknown as Promise<Vehicle[]>,
@@ -247,6 +278,11 @@ export async function getDashboardData(): Promise<DashboardData> {
       m.service_date::text, m.service_type, m.status, m.odometer, m.cost::int, m.vendor, m.notes
       FROM maintenance_records m JOIN vehicles v ON v.id = m.vehicle_id
       ORDER BY m.service_date DESC, m.created_at DESC` as unknown as Promise<MaintenanceRecord[]>,
+    sql`SELECT f.id, f.vehicle_id, v.plate_number, CONCAT(v.brand, ' ', v.model) AS vehicle_name,
+      f.fill_date::text, f.fuel_type, f.station, f.liters::float8, f.price_per_liter::int,
+      f.odometer, f.receipt_url, f.total_cost::int
+      FROM fuel_records f JOIN vehicles v ON v.id = f.vehicle_id
+      ORDER BY f.fill_date DESC, f.created_at DESC` as unknown as Promise<FuelRecord[]>,
     sql`SELECT COUNT(*)::int AS vehicles,
       COUNT(*) FILTER (WHERE status = 'Tersedia')::int AS available,
       COUNT(*) FILTER (WHERE status = 'Servis')::int AS service,
@@ -265,6 +301,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     requests,
     drivers,
     maintenance,
+    fuelRecords,
   };
 }
 
@@ -357,6 +394,36 @@ export async function createMaintenanceRecord(input: Record<string, unknown>) {
     ${input.notes ? String(input.notes).trim() : null}
   )`;
   return { id };
+}
+
+export async function createFuelRecord(input: Record<string, unknown>) {
+  for (const field of ["vehicleId", "fillDate", "fuelType"]) {
+    if (typeof input[field] !== "string" || !input[field].trim()) throw new Error(`Kolom ${field} wajib diisi`);
+  }
+  const liters = Math.max(0, Number(input.liters) || 0);
+  const pricePerLiter = Math.max(0, Math.trunc(Number(input.pricePerLiter) || 0));
+  const odometer = Math.max(0, Math.trunc(Number(input.odometer) || 0));
+  const totalCost = Math.round(liters * pricePerLiter);
+  const receiptUrl = input.receiptUrl ? String(input.receiptUrl).trim() : null;
+  if (receiptUrl) {
+    try {
+      const parsed = new URL(receiptUrl);
+      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
+    } catch {
+      throw new Error("URL bukti struk harus berupa alamat http atau https yang valid");
+    }
+  }
+  await ensureDatabase();
+  const id = `BBM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  await db()`INSERT INTO fuel_records (
+    id, vehicle_id, fill_date, fuel_type, station, liters, price_per_liter,
+    odometer, receipt_url, total_cost
+  ) VALUES (
+    ${id}, ${String(input.vehicleId)}, ${String(input.fillDate)}, ${String(input.fuelType)},
+    ${input.station ? String(input.station).trim() : null}, ${liters}, ${pricePerLiter},
+    ${odometer}, ${receiptUrl}, ${totalCost}
+  )`;
+  return { id, totalCost };
 }
 
 export async function updateVehicle(id: string, input: Record<string, unknown>) {

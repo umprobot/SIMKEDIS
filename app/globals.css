@@ -231,6 +231,7 @@ footer { max-width: 1320px; margin: 0 auto; padding: 42px 36px; border-top: 1px 
 .driver-modal footer { max-width: none; margin: 22px 0 0; padding: 0; border: 0; display: flex; grid-template-columns: none; justify-content: flex-end; gap: 8px; }.driver-modal footer .button { min-height: 38px; padding: 0 14px; border-radius: 8px; font-size: 12px; }.modal-cancel { color: #334155; background: #fff; border: 1px solid #cbd8e7; }.modal-save { color: #fff; background: #079d98; }
 .empty-admin-state { padding: 54px 24px; text-align: center; border: 1px dashed #cfdae5; border-radius: 10px; background: #f8fafc; }.empty-admin-state strong { font-size: 13px; }.empty-admin-state p { margin: 7px 0 0; color: #78879a; font-size: 11px; }
 .status-diajukan, .status-dijadwalkan { background: #e8f2ff; color: #326bb3; }.status-dikerjakan { background: #fff0d8; color: #91601c; }.status-selesai { background: #e3f2dd; color: #387133; }.status-dibatalkan { background: #eceeeb; color: #737b76; }
+.fuel-total { min-height: 45px; padding: 0 16px; display: flex; align-items: center; gap: 5px; border-radius: 8px; background: #f5f7fa; color: #64748b; font-size: 12px; }.fuel-total strong { color: #17223b; }.receipt-link { color: #078f8b; font-size: 9px; font-weight: 800; white-space: nowrap; }.receipt-link:hover { text-decoration: underline; }
 
 @media (max-width: 900px) {
   .feature-strip { gap: 22px; }.public-driver-grid { grid-template-columns: repeat(2, 1fr); }.contact-grid { grid-template-columns: repeat(2, 1fr); }

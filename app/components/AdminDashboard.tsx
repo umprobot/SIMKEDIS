@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import type { Driver, LoanRequest, MaintenanceRecord, Vehicle } from "../../db/queries";
+import type { Driver, FuelRecord, LoanRequest, MaintenanceRecord, Vehicle } from "../../db/queries";
 
 type Data = {
   stats: { vehicles: number; available: number; service: number; pending: number; taxDue: number };
@@ -9,6 +9,7 @@ type Data = {
   requests: LoanRequest[];
   drivers: Driver[];
   maintenance: MaintenanceRecord[];
+  fuelRecords: FuelRecord[];
 };
 
 const tabs = ["Ringkasan", "Kendaraan", "Pengemudi", "Permohonan", "Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person"] as const;
@@ -21,6 +22,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
   const [showForm, setShowForm] = useState(false);
   const [showDriverForm, setShowDriverForm] = useState(false);
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
+  const [showFuelForm, setShowFuelForm] = useState(false);
   const [notice, setNotice] = useState("");
 
   const filteredVehicles = useMemo(() => data.vehicles.filter((vehicle) => {
@@ -54,6 +56,16 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Data pemeliharaan gagal disimpan.");
     setShowMaintenanceForm(false);
+    window.location.reload();
+  }
+
+  async function addFuel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const response = await fetch("/api/fuel", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) return setNotice(result.error ?? "Data pengisian BBM gagal disimpan.");
+    setShowFuelForm(false);
     window.location.reload();
   }
 
@@ -106,10 +118,12 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
         {tab === "Permohonan" && <RequestsPanel requests={data.requests} vehicles={data.vehicles} onDecision={decideRequest} />}
         {tab === "Pengemudi" && <DriversPanel drivers={data.drivers} onAdd={() => setShowDriverForm(true)} />}
         {tab === "Pemeliharaan" && <MaintenancePanel records={data.maintenance} onAdd={() => setShowMaintenanceForm(true)} />}
-        {(["Bahan Bakar", "Jadwal KIR", "Kontak Person"] as Tab[]).includes(tab) && <section className="admin-section admin-coming-soon"><span>SIMKEDIS</span><h2>Modul {tab}</h2><p>Navigasi sudah disiapkan mengikuti struktur pengelolaan kendaraan dinas. Data operasional modul ini dapat ditambahkan setelah format resminya diverifikasi.</p></section>}
+        {tab === "Bahan Bakar" && <FuelPanel records={data.fuelRecords} onAdd={() => setShowFuelForm(true)} />}
+        {(["Jadwal KIR", "Kontak Person"] as Tab[]).includes(tab) && <section className="admin-section admin-coming-soon"><span>SIMKEDIS</span><h2>Modul {tab}</h2><p>Navigasi sudah disiapkan mengikuti struktur pengelolaan kendaraan dinas. Data operasional modul ini dapat ditambahkan setelah format resminya diverifikasi.</p></section>}
       </section>
       {showDriverForm && <DriverModal onClose={() => setShowDriverForm(false)} onSubmit={addDriver} />}
       {showMaintenanceForm && <MaintenanceModal vehicles={data.vehicles} onClose={() => setShowMaintenanceForm(false)} onSubmit={addMaintenance} />}
+      {showFuelForm && <FuelModal vehicles={data.vehicles} onClose={() => setShowFuelForm(false)} onSubmit={addFuel} />}
     </main>
   );
 }
@@ -139,6 +153,18 @@ function MaintenancePanel({ records, onAdd }: { records: MaintenanceRecord[]; on
 function MaintenanceModal({ vehicles, onClose, onSubmit }: { vehicles: Vehicle[]; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   const today = new Date().toISOString().slice(0, 10);
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driver-modal maintenance-modal" role="dialog" aria-modal="true" aria-labelledby="maintenance-modal-title"><header><h2 id="maintenance-modal-title">Tambah Pemeliharaan</h2><button type="button" onClick={onClose} aria-label="Tutup formulir">×</button></header><form onSubmit={onSubmit}><div className="driver-form-grid"><label><span>Kendaraan *</span><select name="vehicleId" required defaultValue=""><option value="" disabled>-- Pilih Kendaraan --</option>{vehicles.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.plate_number} · {vehicle.brand} {vehicle.model}</option>)}</select></label><label><span>Tanggal</span><input name="serviceDate" type="date" required defaultValue={today} /></label><label><span>Jenis</span><select name="serviceType" defaultValue="Servis Rutin"><option>Servis Rutin</option><option>Perbaikan</option><option>Ganti Oli</option><option>Ban</option><option>Kelistrikan</option><option>Body Repair</option><option>Lainnya</option></select></label><label><span>Status</span><select name="status" defaultValue="Diajukan"><option>Diajukan</option><option>Dijadwalkan</option><option>Dikerjakan</option><option>Selesai</option><option>Dibatalkan</option></select></label><label><span>Bengkel</span><input name="vendor" placeholder="Nama bengkel" /></label><label><span>Kilometer</span><input name="odometer" type="number" min="0" step="1" defaultValue="0" /></label><label><span>Biaya (Rp)</span><input name="cost" type="number" min="0" step="1" defaultValue="0" /></label><label className="full-field"><span>Deskripsi</span><textarea name="notes" rows={3} placeholder="Detail perbaikan..." /></label></div><footer><button className="button modal-cancel" type="button" onClick={onClose}>Batal</button><button className="button modal-save" type="submit">Simpan</button></footer></form></section></div>;
+}
+
+function FuelPanel({ records, onAdd }: { records: FuelRecord[]; onAdd: () => void }) {
+  return <section className="admin-section"><div className="section-tools"><div><h2>Riwayat pengisian BBM</h2><p>Penggunaan bahan bakar, kilometer, dan biaya per kendaraan.</p></div><button className="button button-dark" onClick={onAdd}>+ Tambah Pengisian BBM</button></div>{records.length ? <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Kendaraan</th><th>Tanggal</th><th>Jenis BBM</th><th>SPBU</th><th>Liter</th><th>Harga/Liter</th><th>Kilometer</th><th>Total</th><th>Bukti</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td><strong>{record.vehicle_name}</strong><small>{record.plate_number}</small></td><td>{formatDate(record.fill_date)}</td><td>{record.fuel_type}</td><td>{record.station ?? "Belum diisi"}</td><td>{record.liters.toLocaleString("id-ID", { maximumFractionDigits: 2 })} L</td><td>{formatRupiah(record.price_per_liter)}</td><td>{record.odometer.toLocaleString("id-ID")} km</td><td><strong>{formatRupiah(record.total_cost)}</strong></td><td>{record.receipt_url ? <a className="receipt-link" href={record.receipt_url} target="_blank" rel="noreferrer">Lihat struk ↗</a> : "—"}</td></tr>)}</tbody></table></div> : <div className="empty-admin-state"><strong>Belum ada riwayat pengisian BBM</strong><p>Tambahkan transaksi bahan bakar melalui tombol di atas.</p></div>}</section>;
+}
+
+function FuelModal({ vehicles, onClose, onSubmit }: { vehicles: Vehicle[]; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [liters, setLiters] = useState("0");
+  const [pricePerLiter, setPricePerLiter] = useState("0");
+  const total = Math.round((Number(liters) || 0) * (Number(pricePerLiter) || 0));
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driver-modal fuel-modal" role="dialog" aria-modal="true" aria-labelledby="fuel-modal-title"><header><h2 id="fuel-modal-title">Tambah Pengisian BBM</h2><button type="button" onClick={onClose} aria-label="Tutup formulir">×</button></header><form onSubmit={onSubmit}><div className="driver-form-grid"><label><span>Kendaraan *</span><select name="vehicleId" required defaultValue=""><option value="" disabled>-- Pilih Kendaraan --</option>{vehicles.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.plate_number} · {vehicle.brand} {vehicle.model}</option>)}</select></label><label><span>Tanggal</span><input name="fillDate" type="date" required defaultValue={today} /></label><label><span>Jenis BBM</span><select name="fuelType" defaultValue="Pertalite"><option>Pertalite</option><option>Pertamax</option><option>Pertamax Turbo</option><option>Dexlite</option><option>Pertamina Dex</option><option>Solar</option><option>Listrik</option><option>Lainnya</option></select></label><label><span>Lokasi SPBU</span><input name="station" placeholder="Pertamina Jl. Sudirman" /></label><label><span>Liter</span><input name="liters" type="number" min="0" step="0.01" value={liters} onChange={(event) => setLiters(event.target.value)} /></label><label><span>Harga / Liter (Rp)</span><input name="pricePerLiter" type="number" min="0" step="1" value={pricePerLiter} onChange={(event) => setPricePerLiter(event.target.value)} /></label><label><span>Kilometer</span><input name="odometer" type="number" min="0" step="1" defaultValue="0" /></label><label><span>URL Bukti Struk</span><input name="receiptUrl" type="url" placeholder="https://..." /></label><div className="fuel-total full-field"><span>Total Biaya:</span><strong>{formatRupiah(total)}</strong></div></div><footer><button className="button modal-cancel" type="button" onClick={onClose}>Batal</button><button className="button modal-save" type="submit">Simpan</button></footer></form></section></div>;
 }
 
 function VehicleForm({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
