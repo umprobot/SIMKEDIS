@@ -182,6 +182,20 @@ export async function getPublicStats() {
   return row;
 }
 
+export async function getPublicData() {
+  await ensureDatabase();
+  const sql = db();
+  const [stats, vehicles, drivers] = await Promise.all([
+    getPublicStats(),
+    sql`SELECT id, plate_number, brand, model, category, body_type, year, displacement,
+      assignee, usage, status, tax_due_date::text, tax_amount::int, plate_renewal_year, notes
+      FROM vehicles WHERE status = 'Tersedia' ORDER BY brand, model` as unknown as Promise<Vehicle[]>,
+    sql`SELECT id, name, phone, assigned_vehicle, status FROM drivers
+      WHERE status IN ('Tersedia', 'Aktif') ORDER BY name` as unknown as Promise<Driver[]>,
+  ]);
+  return { stats, vehicles, drivers };
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   await ensureDatabase();
   const sql = db();

@@ -1,85 +1,69 @@
 import Link from "next/link";
-import { getPublicStats } from "../db/queries";
+import { getPublicData } from "../db/queries";
 import { PublicRequestForm } from "./components/PublicRequestForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const stats = await getPublicStats().catch(() => ({ vehicles: 68, available: 0, pending: 0 }));
+  const data = await getPublicData().catch(() => ({ stats: { vehicles: 68, available: 0, pending: 0 }, vehicles: [], drivers: [] }));
 
   return (
     <main className="public-shell">
       <header className="public-nav">
         <Link className="brand" href="/" aria-label="Beranda SIMKEDIS">
-          <span className="brand-mark">SK</span>
-          <span><strong>SIMKEDIS</strong><small>Sistem Informasi Kendaraan Dinas</small></span>
+          <span className="brand-mark"><b>DIY</b></span>
+          <span><strong>SIMKEDIS</strong><small>KENDARAAN DINAS</small></span>
         </Link>
         <nav aria-label="Navigasi utama">
-          <a href="#layanan">Layanan</a>
-          <a href="#alur">Alur</a>
+          <a href="#peminjaman">Ajukan Peminjaman</a>
+          <a href="#driver">Driver Tersedia</a>
           <a href="#kontak">Kontak</a>
+          <Link className="admin-link" href="/admin"><span>♢</span> Admin</Link>
         </nav>
-        <Link className="button button-ghost" href="/admin">Masuk Admin <span aria-hidden="true">↗</span></Link>
       </header>
 
       <section className="hero">
         <div className="hero-copy">
-          <span className="eyebrow"><i /> Layanan kendaraan dinas terintegrasi</span>
-          <h1>Mobilitas dinas,<br /><em>lebih tertib.</em></h1>
-          <p>Kelola armada, permohonan kendaraan, pajak, dan kesiapan operasional dalam satu layanan yang mudah dipantau.</p>
+          <span className="eyebrow">♢ Portal Layanan Publik</span>
+          <h1>Sistem Informasi Kendaraan<br />Dinas</h1>
+          <p>Ajukan peminjaman kendaraan dinas, lihat pengemudi yang tersedia, dan hubungi pengelola dengan mudah secara online.</p>
           <div className="hero-actions">
-            <a className="button button-primary" href="#permohonan">Ajukan kendaraan <span>→</span></a>
-            <a className="text-link" href="#alur">Lihat cara kerja <span>↓</span></a>
+            <a className="button button-primary" href="#peminjaman">Ajukan Peminjaman <span>→</span></a>
+            <a className="button button-outline" href="#driver">Lihat Driver Tersedia</a>
           </div>
         </div>
-        <div className="hero-panel" aria-label="Ringkasan armada">
-          <div className="route-map" aria-hidden="true"><i className="route route-a" /><i className="route route-b" /><b className="pin pin-a" /><b className="pin pin-b" /><b className="pin pin-c" /></div>
-          <div className="fleet-card">
-            <span className="fleet-icon">↗</span>
-            <div><small>Armada tercatat</small><strong>{stats.vehicles}</strong><span>kendaraan lintas kategori</span></div>
-          </div>
-          <div className="mini-status"><i /> Sistem aktif <span>Diperbarui otomatis</span></div>
+      </section>
+
+      <section className="feature-strip" aria-label="Keunggulan layanan">
+        <article><span className="feature-icon">▣</span><div><strong>Peminjaman Online</strong><p>Ajukan penggunaan kendaraan dinas kapan saja tanpa antre.</p></div></article>
+        <article><span className="feature-icon">♙</span><div><strong>Driver Tersedia</strong><p>Lihat daftar pengemudi yang siap bertugas hari ini.</p></div></article>
+        <article><span className="feature-icon">◴</span><div><strong>Transparan</strong><p>Status pengajuan dapat dilacak secara real-time.</p></div></article>
+      </section>
+
+      <section className="request-section" id="peminjaman">
+        <div className="section-heading centered"><span className="section-badge">▣ Form Peminjaman</span><h2>Ajukan Peminjaman Kendaraan</h2><p>Ajukan kendaraan dinas melalui formulir berikut. Pengajuan akan ditinjau oleh admin.</p></div>
+        <PublicRequestForm vehicles={data.vehicles} drivers={data.drivers} />
+      </section>
+
+      <section className="drivers-section" id="driver">
+        <div className="section-heading centered"><span className="section-badge blue">♙ Driver Tersedia</span><h2>Pengemudi Siap Bertugas</h2><p>Daftar pengemudi yang aktif dan tersedia untuk dinas.</p></div>
+        <div className="public-driver-grid">
+          {data.drivers.length ? data.drivers.map((driver) => <article className="public-driver-card" key={driver.id}><div className="driver-main"><span className="driver-avatar">{driver.name.charAt(0)}</span><div><h3>{driver.name}</h3><p>{driver.assigned_vehicle ?? "Driver Pool Kendaraan"}</p><span className="availability">Aktif</span></div></div><div className="driver-meta"><span>Unit: Biro Umum dan Protokol</span><span>☎ {driver.phone ?? "Kontak melalui admin"}</span></div></article>) : <article className="empty-public-card"><strong>Pengemudi sedang bertugas</strong><p>Silakan hubungi admin untuk informasi ketersediaan terbaru.</p></article>}
         </div>
       </section>
 
-      <section className="public-stats" aria-label="Statistik layanan">
-        <article><span>01</span><strong>{stats.vehicles}</strong><p>Total armada tercatat</p></article>
-        <article><span>02</span><strong>{stats.available}</strong><p>Kendaraan siap digunakan</p></article>
-        <article><span>03</span><strong>{stats.pending}</strong><p>Permohonan menunggu</p></article>
-        <article><span>04</span><strong>4</strong><p>Kategori pengelolaan</p></article>
-      </section>
-
-      <section className="service-section" id="layanan">
-        <div className="section-heading"><span className="eyebrow"><i /> Cakupan layanan</span><h2>Satu sistem untuk seluruh <em>siklus armada.</em></h2></div>
-        <div className="service-grid">
-          {[
-            ["01", "Data armada", "Inventaris kendaraan roda dua, kendaraan jabatan, layanan tamu, dan operasional biro."],
-            ["02", "Peminjaman", "Permohonan tercatat rapi dengan status persetujuan yang dapat dipantau."],
-            ["03", "Pajak & dokumen", "Pengingat jatuh tempo pajak dan pembaruan pelat agar tidak terlewat."],
-            ["04", "Kesiapan operasional", "Pantau status kendaraan, penanggung jawab, pengemudi, dan jadwal servis."],
-          ].map(([number, title, body]) => <article className="service-card" key={number}><span>{number}</span><div className="service-symbol" aria-hidden="true">{number === "01" ? "▣" : number === "02" ? "↗" : number === "03" ? "◷" : "◇"}</div><h3>{title}</h3><p>{body}</p></article>)}
+      <section className="contact-section" id="kontak">
+        <div className="section-heading centered"><span className="section-badge neutral">☎ Kontak Person</span><h2>Hubungi Pengelola</h2><p>Ada pertanyaan? Tim kami siap membantu Anda.</p></div>
+        <a className="whatsapp-card" href="https://wa.me/62897979767" target="_blank" rel="noreferrer"><span className="wa-icon">◔</span><div><strong>Admin Pool Kendaraan</strong><small>Chat via WhatsApp · 0897-9797-67</small></div><b>→</b></a>
+        <div className="contact-grid">
+          <article><span>☎</span><small>TELEPON</small><strong>(0274) 562811</strong></article>
+          <article><span>✉</span><small>EMAIL</small><strong>inovasibiroup@gmail.com</strong></article>
+          <article><span>⌖</span><small>ALAMAT</small><strong>Kompleks Kepatihan, Yogyakarta</strong></article>
+          <article><span>◷</span><small>JAM LAYANAN</small><strong>08.00 - 16.00 WIB</strong></article>
         </div>
       </section>
 
-      <section className="flow-section" id="alur">
-        <div><span className="eyebrow light"><i /> Alur permohonan</span><h2>Tiga langkah,<br />tanpa berbelit.</h2><p>Permohonan masuk langsung ke meja admin untuk diverifikasi dan ditentukan armadanya.</p></div>
-        <ol>
-          <li><span>01</span><div><strong>Isi permohonan</strong><p>Lengkapi unit, jadwal, tujuan, dan kebutuhan perjalanan.</p></div></li>
-          <li><span>02</span><div><strong>Verifikasi admin</strong><p>Admin memeriksa jadwal dan ketersediaan kendaraan.</p></div></li>
-          <li><span>03</span><div><strong>Konfirmasi</strong><p>Status disetujui atau ditolak tercatat untuk tindak lanjut.</p></div></li>
-        </ol>
-      </section>
-
-      <section className="request-section" id="permohonan">
-        <div className="request-intro"><span className="eyebrow"><i /> Formulir layanan</span><h2>Ajukan kendaraan <em>dinas.</em></h2><p>Gunakan formulir ini untuk mencatat kebutuhan perjalanan. Pastikan jadwal dan tujuan sudah benar sebelum dikirim.</p><div className="privacy-note"><strong>Privasi terjaga</strong><span>Data permohonan hanya dapat dibaca dan diproses oleh admin.</span></div></div>
-        <PublicRequestForm />
-      </section>
-
-      <footer id="kontak">
-        <div className="brand footer-brand"><span className="brand-mark">SK</span><span><strong>SIMKEDIS</strong><small>Sistem Informasi Kendaraan Dinas</small></span></div>
-        <p>Layanan pengelolaan kendaraan dinas yang lebih tertib, terukur, dan akuntabel.</p>
-        <Link href="/admin">Portal admin →</Link>
-      </footer>
+      <footer><div className="brand footer-brand"><span className="brand-mark"><b>DIY</b></span><span><strong>SIMKEDIS</strong><small>KENDARAAN DINAS</small></span></div><p>© 2026 SIMKEDIS. Layanan pengelolaan kendaraan dinas.</p><Link href="/admin">Portal Admin →</Link></footer>
     </main>
   );
 }

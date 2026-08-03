@@ -10,7 +10,7 @@ type Data = {
   drivers: Driver[];
 };
 
-const tabs = ["Ringkasan", "Kendaraan", "Permohonan", "Pengemudi"] as const;
+const tabs = ["Ringkasan", "Kendaraan", "Pengemudi", "Permohonan", "Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person"] as const;
 type Tab = typeof tabs[number];
 
 export function AdminDashboard({ user, data, signOutPath }: { user: { displayName: string; email: string }; data: Data; signOutPath: string }) {
@@ -64,7 +64,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
     <main className="admin-shell">
       <aside className="admin-sidebar">
         <div className="brand admin-brand"><span className="brand-mark">SK</span><span><strong>SIMKEDIS</strong><small>Panel Pengelola</small></span></div>
-        <nav>{tabs.map((item, index) => <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}><span>{["▦", "▣", "↗", "◇"][index]}</span>{item}{item === "Permohonan" && data.stats.pending > 0 && <b>{data.stats.pending}</b>}</button>)}</nav>
+        <nav>{tabs.map((item, index) => <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}><span>{["▦", "▱", "♙", "▣", "⌁", "▤", "▣", "☎"][index]}</span>{item === "Ringkasan" ? "Dashboard" : item}{item === "Permohonan" && data.stats.pending > 0 && <b>{data.stats.pending}</b>}</button>)}</nav>
         <div className="sidebar-help"><span>?</span><strong>Butuh bantuan?</strong><p>Gunakan data terverifikasi sebelum ditampilkan pada layanan publik.</p></div>
         <a className="sidebar-signout" href={signOutPath}>Keluar dari admin <span>↗</span></a>
       </aside>
@@ -82,6 +82,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
         </section>}
         {tab === "Permohonan" && <RequestsPanel requests={data.requests} vehicles={data.vehicles} onDecision={decideRequest} />}
         {tab === "Pengemudi" && <DriversPanel drivers={data.drivers} />}
+        {(["Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person"] as Tab[]).includes(tab) && <section className="admin-section admin-coming-soon"><span>SIMKEDIS</span><h2>Modul {tab}</h2><p>Navigasi sudah disiapkan mengikuti struktur pengelolaan kendaraan dinas. Data operasional modul ini dapat ditambahkan setelah format resminya diverifikasi.</p></section>}
       </section>
     </main>
   );
