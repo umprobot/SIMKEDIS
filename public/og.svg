@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">SIMKEDIS</title>
+  <desc id="description">Sistem Informasi Kendaraan Dinas — mobilitas dinas lebih tertib.</desc>
+  <rect width="1200" height="630" fill="#173c32"/>
+  <circle cx="1030" cy="90" r="270" fill="#cfe66d" opacity=".16"/>
+  <path d="M720 465c130-145 220-194 410-210" fill="none" stroke="#cfe66d" stroke-width="8" stroke-linecap="round" opacity=".65"/>
+  <circle cx="760" cy="427" r="13" fill="#cfe66d"/><circle cx="1110" cy="260" r="13" fill="#cfe66d"/>
+  <rect x="84" y="78" width="88" height="88" rx="18" fill="#cfe66d"/>
+  <text x="128" y="135" text-anchor="middle" font-family="Arial, sans-serif" font-size="34" font-weight="800" fill="#173c32">SK</text>
+  <text x="84" y="254" font-family="Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="5" fill="#cfe66d">SIMKEDIS</text>
+  <text x="84" y="344" font-family="Georgia, serif" font-size="70" fill="#ffffff">Mobilitas dinas,</text>
+  <text x="84" y="422" font-family="Georgia, serif" font-size="70" font-style="italic" fill="#cfe66d">lebih tertib.</text>
+  <text x="88" y="505" font-family="Arial, sans-serif" font-size="22" fill="#d8e3de">Armada · Permohonan · Pajak · Kesiapan operasional</text>
+</svg>

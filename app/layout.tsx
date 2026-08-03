@@ -18,9 +18,9 @@ export async function generateMetadata(): Promise<Metadata> {
       description: "Kelola armada dan permohonan kendaraan dinas dalam satu layanan.",
       type: "website",
       locale: "id_ID",
-      images: [{ url: "/og.png", width: 1536, height: 1024, alt: "SIMKEDIS — Kendaraan dinas, lebih tertib." }],
+      images: [{ url: "/og.svg", width: 1200, height: 630, alt: "SIMKEDIS — Kendaraan dinas, lebih tertib." }],
     },
-    twitter: { card: "summary_large_image", title: "SIMKEDIS", description: "Kendaraan dinas lebih tertib.", images: ["/og.png"] },
+    twitter: { card: "summary_large_image", title: "SIMKEDIS", description: "Kendaraan dinas lebih tertib.", images: ["/og.svg"] },
   };
 }
 
