@@ -36,7 +36,15 @@ export type LoanRequest = {
 export type Driver = {
   id: string;
   name: string;
+  nip: string | null;
+  position: string | null;
+  unit: string | null;
+  license_number: string | null;
+  license_type: string | null;
+  license_expiry: string | null;
   phone: string | null;
+  photo_url: string | null;
+  address: string | null;
   assigned_vehicle: string | null;
   status: string;
 };
@@ -122,6 +130,14 @@ async function initialize() {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`;
+  await sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS nip TEXT`;
+  await sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS position TEXT`;
+  await sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS unit TEXT`;
+  await sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS license_number TEXT`;
+  await sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS license_type TEXT`;
+  await sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS license_expiry DATE`;
+  await sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS photo_url TEXT`;
+  await sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS address TEXT`;
   await sql`CREATE TABLE IF NOT EXISTS maintenance_records (
     id TEXT PRIMARY KEY,
     vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
@@ -190,7 +206,8 @@ export async function getPublicData() {
     sql`SELECT id, plate_number, brand, model, category, body_type, year, displacement,
       assignee, usage, status, tax_due_date::text, tax_amount::int, plate_renewal_year, notes
       FROM vehicles WHERE status = 'Tersedia' ORDER BY brand, model` as unknown as Promise<Vehicle[]>,
-    sql`SELECT id, name, phone, assigned_vehicle, status FROM drivers
+    sql`SELECT id, name, nip, position, unit, license_number, license_type,
+      license_expiry::text, phone, photo_url, address, assigned_vehicle, status FROM drivers
       WHERE status IN ('Tersedia', 'Aktif') ORDER BY name` as unknown as Promise<Driver[]>,
   ]);
   return { stats, vehicles, drivers };
@@ -206,7 +223,9 @@ export async function getDashboardData(): Promise<DashboardData> {
     sql`SELECT id, applicant_name, unit, contact_phone, purpose, event_date::text,
       event_time::text, destination, status, vehicle_id, admin_note, created_at::text
       FROM loan_requests ORDER BY created_at DESC` as unknown as Promise<LoanRequest[]>,
-    sql`SELECT id, name, phone, assigned_vehicle, status FROM drivers ORDER BY name` as unknown as Promise<Driver[]>,
+    sql`SELECT id, name, nip, position, unit, license_number, license_type,
+      license_expiry::text, phone, photo_url, address, assigned_vehicle, status
+      FROM drivers ORDER BY name` as unknown as Promise<Driver[]>,
     sql`SELECT COUNT(*)::int AS vehicles,
       COUNT(*) FILTER (WHERE status = 'Tersedia')::int AS available,
       COUNT(*) FILTER (WHERE status = 'Servis')::int AS service,
@@ -266,6 +285,34 @@ export async function createVehicle(input: Record<string, unknown>) {
     ${input.assignee ? String(input.assignee) : null}, ${input.usage ? String(input.usage) : null},
     ${String(input.status || "Tersedia")}, ${input.taxDueDate ? String(input.taxDueDate) : null},
     ${Number(input.taxAmount) || 0}, ${Number(input.plateRenewalYear) || null}, ${input.notes ? String(input.notes) : null}
+  )`;
+  return { id };
+}
+
+export async function createDriver(input: Record<string, unknown>) {
+  if (typeof input.name !== "string" || !input.name.trim()) throw new Error("Nama pengemudi wajib diisi");
+  const status = String(input.status || "Aktif");
+  if (!["Aktif", "Tersedia", "Bertugas", "Tidak Aktif", "Libur"].includes(status)) throw new Error("Status pengemudi tidak valid");
+  const photoUrl = input.photoUrl ? String(input.photoUrl).trim() : null;
+  if (photoUrl) {
+    try {
+      const parsed = new URL(photoUrl);
+      if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
+    } catch {
+      throw new Error("URL foto harus berupa alamat http atau https yang valid");
+    }
+  }
+  await ensureDatabase();
+  const id = `DRV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  await db()`INSERT INTO drivers (
+    id, name, nip, position, unit, license_number, license_type, license_expiry,
+    phone, photo_url, address, status
+  ) VALUES (
+    ${id}, ${String(input.name).trim()}, ${input.nip ? String(input.nip).trim() : null},
+    ${input.position ? String(input.position).trim() : null}, ${input.unit ? String(input.unit).trim() : null},
+    ${input.licenseNumber ? String(input.licenseNumber).trim() : null}, ${input.licenseType ? String(input.licenseType) : null},
+    ${input.licenseExpiry ? String(input.licenseExpiry) : null}, ${input.phone ? String(input.phone).trim() : null},
+    ${photoUrl}, ${input.address ? String(input.address).trim() : null}, ${status}
   )`;
   return { id };
 }

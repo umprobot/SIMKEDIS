@@ -18,6 +18,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Semua");
   const [showForm, setShowForm] = useState(false);
+  const [showDriverForm, setShowDriverForm] = useState(false);
   const [notice, setNotice] = useState("");
 
   const filteredVehicles = useMemo(() => data.vehicles.filter((vehicle) => {
@@ -31,6 +32,16 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
     const response = await fetch("/api/vehicles", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Data kendaraan gagal disimpan.");
+    window.location.reload();
+  }
+
+  async function addDriver(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const response = await fetch("/api/drivers", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) return setNotice(result.error ?? "Data pengemudi gagal disimpan.");
+    setShowDriverForm(false);
     window.location.reload();
   }
 
@@ -81,9 +92,10 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
           <div className="data-table-wrap"><table className="data-table"><thead><tr><th>Kendaraan</th><th>Pelat</th><th>Kategori</th><th>Pengguna</th><th>Pajak</th><th>Status</th><th /></tr></thead><tbody>{filteredVehicles.map((vehicle) => <tr key={vehicle.id}><td><strong>{vehicle.brand} {vehicle.model}</strong><small>{vehicle.body_type ?? "—"} · {vehicle.year ?? "—"}</small></td><td><code>{vehicle.plate_number}</code></td><td>{vehicle.category}</td><td>{vehicle.assignee ?? "Belum ditetapkan"}</td><td>{formatDate(vehicle.tax_due_date)}</td><td><select className={`status-select status-${slug(vehicle.status)}`} value={vehicle.status} onChange={(event) => changeVehicleStatus(vehicle, event.target.value)}>{["Tersedia", "Dipakai", "Servis", "Tidak Aktif"].map((status) => <option key={status}>{status}</option>)}</select></td><td><button className="icon-button danger" aria-label={`Hapus ${vehicle.plate_number}`} onClick={() => removeVehicle(vehicle)}>×</button></td></tr>)}</tbody></table></div>
         </section>}
         {tab === "Permohonan" && <RequestsPanel requests={data.requests} vehicles={data.vehicles} onDecision={decideRequest} />}
-        {tab === "Pengemudi" && <DriversPanel drivers={data.drivers} />}
+        {tab === "Pengemudi" && <DriversPanel drivers={data.drivers} onAdd={() => setShowDriverForm(true)} />}
         {(["Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person"] as Tab[]).includes(tab) && <section className="admin-section admin-coming-soon"><span>SIMKEDIS</span><h2>Modul {tab}</h2><p>Navigasi sudah disiapkan mengikuti struktur pengelolaan kendaraan dinas. Data operasional modul ini dapat ditambahkan setelah format resminya diverifikasi.</p></section>}
       </section>
+      {showDriverForm && <DriverModal onClose={() => setShowDriverForm(false)} onSubmit={addDriver} />}
     </main>
   );
 }
@@ -98,8 +110,12 @@ function RequestsPanel({ requests, vehicles, onDecision }: { requests: LoanReque
   return <section className="admin-section"><div className="section-tools"><div><h2>Permohonan kendaraan</h2><p>Verifikasi jadwal, tujuan, dan tetapkan armada.</p></div><span className="count-badge">{requests.length} permohonan</span></div><div className="requests-grid">{requests.map((request) => <article className="request-admin-card" key={request.id}><div className="request-admin-top"><div><code>{request.id}</code><h3>{request.applicant_name}</h3><p>{request.unit}</p></div><StatusPill value={request.status} /></div><dl><div><dt>Jadwal</dt><dd>{formatDate(request.event_date)} · {request.event_time}</dd></div><div><dt>Tujuan</dt><dd>{request.destination}</dd></div><div><dt>Keperluan</dt><dd>{request.purpose}</dd></div></dl>{request.status === "Menunggu Persetujuan" && <div className="request-actions"><select id={`vehicle-${request.id}`} defaultValue=""><option value="">Pilih kendaraan (opsional)</option>{vehicles.filter((v) => v.status === "Tersedia").map((v) => <option value={v.id} key={v.id}>{v.plate_number} · {v.brand} {v.model}</option>)}</select><div><button className="button approve" onClick={() => onDecision(request, "Disetujui")}>Setujui</button><button className="button reject" onClick={() => onDecision(request, "Ditolak")}>Tolak</button></div></div>}</article>)}</div></section>;
 }
 
-function DriversPanel({ drivers }: { drivers: Driver[] }) {
-  return <section className="admin-section"><div className="section-tools"><div><h2>Daftar pengemudi</h2><p>Status pengemudi dan kendaraan yang sedang ditangani.</p></div><button className="button button-dark" disabled>+ Tambah pengemudi</button></div><div className="driver-grid">{drivers.map((driver) => <article key={driver.id}><span>{driver.name.slice(-1)}</span><div><h3>{driver.name}</h3><p>{driver.assigned_vehicle ?? "Belum ada kendaraan"}</p></div><StatusPill value={driver.status} /></article>)}</div><p className="data-note">Modul pengemudi sudah mengikuti kolom workbook. Penambahan dan nomor kontak dapat diaktifkan setelah data resmi diverifikasi.</p></section>;
+function DriversPanel({ drivers, onAdd }: { drivers: Driver[]; onAdd: () => void }) {
+  return <section className="admin-section"><div className="section-tools"><div><h2>Daftar pengemudi</h2><p>Data identitas, SIM, dan status pengemudi kendaraan dinas.</p></div><button className="button button-dark" onClick={onAdd}>+ Tambah Pengemudi</button></div><div className="driver-grid">{drivers.map((driver) => <article key={driver.id}><span>{driver.name.charAt(0)}</span><div><h3>{driver.name}</h3><p>{driver.position ?? "Pengemudi"} · {driver.unit ?? driver.assigned_vehicle ?? "Belum ada unit"}</p><small>{driver.license_type ? `${driver.license_type}${driver.license_expiry ? ` · berlaku s.d. ${formatDate(driver.license_expiry)}` : ""}` : "SIM belum dicatat"}</small></div><StatusPill value={driver.status} /></article>)}</div>{drivers.length === 0 && <p className="data-note">Belum ada data pengemudi. Gunakan tombol Tambah Pengemudi untuk membuat data pertama.</p>}</section>;
+}
+
+function DriverModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driver-modal" role="dialog" aria-modal="true" aria-labelledby="driver-modal-title"><header><h2 id="driver-modal-title">Tambah Pengemudi</h2><button type="button" onClick={onClose} aria-label="Tutup formulir">×</button></header><form onSubmit={onSubmit}><div className="driver-form-grid"><label><span>Nama *</span><input name="name" required autoFocus placeholder="Budi Santoso" /></label><label><span>NIP</span><input name="nip" inputMode="numeric" placeholder="19850101 201001 1 001" /></label><label><span>Jabatan</span><input name="position" placeholder="Analis" /></label><label><span>Unit Kerja</span><input name="unit" placeholder="Bagian Umum" /></label><label><span>No. SIM</span><input name="licenseNumber" /></label><label><span>Jenis SIM</span><select name="licenseType" defaultValue="SIM B1"><option>SIM A</option><option>SIM B1</option><option>SIM B2</option><option>SIM C</option></select></label><label><span>Berlaku SIM</span><input name="licenseExpiry" type="date" /></label><label><span>No. HP</span><input name="phone" inputMode="tel" placeholder="0812..." /></label><label><span>Status</span><select name="status" defaultValue="Aktif"><option>Aktif</option><option>Tersedia</option><option>Bertugas</option><option>Libur</option><option>Tidak Aktif</option></select></label><label><span>URL Foto</span><input name="photoUrl" type="url" placeholder="https://..." /></label><label className="full-field"><span>Alamat</span><textarea name="address" rows={3} placeholder="Jl. ..." /></label></div><footer><button className="button modal-cancel" type="button" onClick={onClose}>Batal</button><button className="button modal-save" type="submit">Simpan</button></footer></form></section></div>;
 }
 
 function VehicleForm({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
