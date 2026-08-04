@@ -15,7 +15,12 @@ export function DriverSignIn() {
     const username = String(form.get("username") ?? "").trim().toLowerCase();
     const password = String(form.get("password") ?? "");
     try {
-      await signIn.password({ emailAddress: `${username}@driver.simkedis.vercel.app`, password });
+      const { error } = await signIn.password({ emailAddress: `${username}@driver.simkedis.vercel.app`, password });
+      if (error) {
+        const code = error.code;
+        if (code === "form_password_compromised" || code === "form_password_pwned") return setMessage("Password lama tidak aman. Hubungi admin untuk melakukan reset password.");
+        return setMessage("Username atau password tidak sesuai.");
+      }
       if (signIn.status !== "complete") return setMessage("Username atau password tidak sesuai.");
       await signIn.finalize({ navigate: ({ decorateUrl }) => { window.location.assign(decorateUrl("/admin")); } });
     } catch {

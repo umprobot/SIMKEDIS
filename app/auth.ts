@@ -21,7 +21,7 @@ export type ManagedUser = {
 };
 
 const DRIVER_DOMAIN = "driver.simkedis.vercel.app";
-const DEFAULT_PASSWORD = "123456";
+const DEFAULT_PASSWORD = "ArmadaDIY#2026!";
 const DEFAULT_DRIVERS = ["budi", "arfangi", "ipnu", "agus"] as const;
 
 export function isClerkConfigured() {
@@ -88,7 +88,7 @@ async function createDriverAccount(username: string, displayName: string, passwo
     emailAddress: [`${username}@${DRIVER_DOMAIN}`],
     firstName: displayName,
     password,
-    skipPasswordChecks: true,
+    skipPasswordChecks: false,
     publicMetadata: { role: "driver", active: true, username },
   });
 }
@@ -131,7 +131,7 @@ export async function createManagedDriver(input: Record<string, unknown>) {
   const displayName = String(input.displayName ?? "").trim();
   if (!displayName) throw new Error("Nama pengguna wajib diisi");
   const password = String(input.password || DEFAULT_PASSWORD);
-  if (password.length < 6) throw new Error("Password minimal 6 karakter");
+  if (password.length < 10) throw new Error("Password minimal 10 karakter");
   const existing = await (await clerkClient()).users.getUserList({ emailAddress: [`${username}@${DRIVER_DOMAIN}`], limit: 1 });
   if (existing.totalCount > 0) throw new Error("Username sudah digunakan");
   const user = await createDriverAccount(username, displayName, password);
@@ -162,7 +162,7 @@ export async function updateManagedDriver(userId: string, input: Record<string, 
     return { id: userId, username, displayName };
   }
   if (action === "reset-password") {
-    await client.users.updateUser(userId, { password: DEFAULT_PASSWORD, skipPasswordChecks: true, signOutOfOtherSessions: true });
+    await client.users.updateUser(userId, { password: DEFAULT_PASSWORD, skipPasswordChecks: false, signOutOfOtherSessions: true });
     return { passwordReset: true };
   }
   if (action === "toggle-active") {
