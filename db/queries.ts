@@ -302,7 +302,7 @@ export async function getPublicData() {
       FROM vehicles WHERE status = 'Tersedia' ORDER BY brand, model` as unknown as Promise<Vehicle[]>,
     sql`SELECT id, name, nip, position, unit, license_number, license_type,
       license_expiry::text, phone, photo_url, address, assigned_vehicle, status FROM drivers
-      WHERE status IN ('Tersedia', 'Aktif') ORDER BY name` as unknown as Promise<Driver[]>,
+      WHERE status = 'Tersedia' ORDER BY name` as unknown as Promise<Driver[]>,
   ]);
   return { stats, vehicles, drivers };
 }
@@ -452,6 +452,15 @@ export async function createMaintenanceRecord(input: Record<string, unknown>) {
     ${input.notes ? String(input.notes).trim() : null}
   )`;
   return { id };
+}
+
+export async function updateDriverStatus(id: string, input: Record<string, unknown>) {
+  const status = String(input.status || "");
+  if (!["Tersedia", "Bertugas"].includes(status)) throw new Error("Status pengemudi tidak valid");
+  await ensureDatabase();
+  const result = await db()`UPDATE drivers SET status = ${status}, updated_at = NOW() WHERE id = ${id} RETURNING id` as unknown as Array<{ id: string }>;
+  if (result.length === 0) throw new Error("Pengemudi tidak ditemukan");
+  return { id, status };
 }
 
 export async function createFuelRecord(input: Record<string, unknown>) {

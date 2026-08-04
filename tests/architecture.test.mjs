@@ -5,13 +5,14 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 
 test("contains public service, admin authentication, and API surfaces", async () => {
-  const [home, admin, auth, requestApi, kirApi, usersApi] = await Promise.all([
+  const [home, admin, auth, requestApi, kirApi, usersApi, driverStatusApi] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/admin/page.tsx", root), "utf8"),
     readFile(new URL("app/auth.ts", root), "utf8"),
     readFile(new URL("app/api/requests/route.ts", root), "utf8"),
     readFile(new URL("app/api/kir/route.ts", root), "utf8"),
     readFile(new URL("app/api/users/route.ts", root), "utf8"),
+    readFile(new URL("app/api/drivers/[id]/route.ts", root), "utf8"),
   ]);
   assert.match(home, /Ajukan kendaraan/);
   assert.match(home, /PublicRequestForm/);
@@ -24,6 +25,8 @@ test("contains public service, admin authentication, and API surfaces", async ()
   assert.match(usersApi, /createManagedDriver/);
   assert.match(auth, /publicMetadata/);
   assert.match(auth, /DEFAULT_DRIVERS/);
+  assert.match(driverStatusApi, /getAdminUser/);
+  assert.match(driverStatusApi, /updateDriverStatus/);
 });
 
 test("uses a lazy Neon client and initializes all core tables", async () => {
