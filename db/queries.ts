@@ -539,6 +539,82 @@ export async function createKirRecord(input: Record<string, unknown>) {
   return { id, nextTestDate: validUntil };
 }
 
+export async function updateDriver(id: string, input: Record<string, unknown>) {
+  if (typeof input.name !== "string" || !input.name.trim()) throw new Error("Nama pengemudi wajib diisi");
+  const name = input.name.trim();
+  const phone = input.phone ? String(input.phone).trim() : null;
+  const status = String(input.status || "Tersedia");
+  if (!["Aktif", "Tersedia", "Bertugas", "Tidak Aktif", "Libur"].includes(status)) throw new Error("Status pengemudi tidak valid");
+  const photoUrl = input.photoUrl ? String(input.photoUrl).trim() : null;
+  if (photoUrl) {
+    try { const parsed = new URL(photoUrl); if (!["http:", "https:"].includes(parsed.protocol)) throw new Error(); }
+    catch { throw new Error("URL foto harus berupa alamat http atau https yang valid"); }
+  }
+  await ensureDatabase();
+  const duplicates = await db()`SELECT id FROM drivers WHERE id <> ${id} AND LOWER(TRIM(name)) = ${name.toLowerCase()}
+    AND COALESCE(NULLIF(TRIM(phone), ''), '') = ${phone ?? ""} LIMIT 1` as unknown as Array<{ id: string }>;
+  if (duplicates.length > 0) throw new Error("Pengemudi dengan nama dan nomor HP yang sama sudah terdaftar");
+  const result = await db()`UPDATE drivers SET name = ${name}, nip = ${input.nip ? String(input.nip).trim() : null},
+    position = ${input.position ? String(input.position).trim() : null}, unit = ${input.unit ? String(input.unit).trim() : null},
+    license_number = ${input.licenseNumber ? String(input.licenseNumber).trim() : null}, license_type = ${input.licenseType ? String(input.licenseType) : null},
+    license_expiry = ${input.licenseExpiry ? String(input.licenseExpiry) : null}, phone = ${phone}, photo_url = ${photoUrl},
+    address = ${input.address ? String(input.address).trim() : null}, status = ${status}, updated_at = NOW()
+    WHERE id = ${id} RETURNING id` as unknown as Array<{ id: string }>;
+  if (result.length === 0) throw new Error("Pengemudi tidak ditemukan");
+  return { id };
+}
+
+export async function updateMaintenanceRecord(id: string, input: Record<string, unknown>) {
+  for (const field of ["vehicleId", "serviceDate", "serviceType"]) if (typeof input[field] !== "string" || !input[field].trim()) throw new Error(`Kolom ${field} wajib diisi`);
+  const status = String(input.status || "Diajukan");
+  if (!["Diajukan", "Dijadwalkan", "Dikerjakan", "Selesai", "Dibatalkan"].includes(status)) throw new Error("Status pemeliharaan tidak valid");
+  await ensureDatabase();
+  const result = await db()`UPDATE maintenance_records SET vehicle_id = ${String(input.vehicleId)}, service_date = ${String(input.serviceDate)},
+    service_type = ${String(input.serviceType)}, status = ${status}, odometer = ${Math.max(0, Math.trunc(Number(input.odometer) || 0))},
+    cost = ${Math.max(0, Math.trunc(Number(input.cost) || 0))}, vendor = ${input.vendor ? String(input.vendor).trim() : null},
+    notes = ${input.notes ? String(input.notes).trim() : null} WHERE id = ${id} RETURNING id` as unknown as Array<{ id: string }>;
+  if (result.length === 0) throw new Error("Data pemeliharaan tidak ditemukan");
+  return { id };
+}
+
+export async function updateFuelRecord(id: string, input: Record<string, unknown>) {
+  for (const field of ["vehicleId", "fillDate", "fuelType"]) if (typeof input[field] !== "string" || !input[field].trim()) throw new Error(`Kolom ${field} wajib diisi`);
+  const liters = Math.max(0, Number(input.liters) || 0), pricePerLiter = Math.max(0, Math.trunc(Number(input.pricePerLiter) || 0));
+  const receiptUrl = input.receiptUrl ? String(input.receiptUrl).trim() : null;
+  if (receiptUrl) {
+    try { const parsed = new URL(receiptUrl); if (!["http:", "https:"].includes(parsed.protocol)) throw new Error(); }
+    catch { throw new Error("URL bukti struk harus berupa alamat http atau https yang valid"); }
+  }
+  const totalCost = Math.round(liters * pricePerLiter);
+  await ensureDatabase();
+  const result = await db()`UPDATE fuel_records SET vehicle_id = ${String(input.vehicleId)}, fill_date = ${String(input.fillDate)},
+    fuel_type = ${String(input.fuelType)}, station = ${input.station ? String(input.station).trim() : null}, liters = ${liters},
+    price_per_liter = ${pricePerLiter}, odometer = ${Math.max(0, Math.trunc(Number(input.odometer) || 0))}, receipt_url = ${receiptUrl},
+    total_cost = ${totalCost} WHERE id = ${id} RETURNING id` as unknown as Array<{ id: string }>;
+  if (result.length === 0) throw new Error("Data BBM tidak ditemukan");
+  return { id, totalCost };
+}
+
+export async function updateKirRecord(id: string, input: Record<string, unknown>) {
+  for (const field of ["vehicleId", "plateNumber", "testNumber", "vehicleType", "brandModel", "testResult", "lastTestDate", "validUntil"]) if (typeof input[field] !== "string" || !input[field].trim()) throw new Error(`Kolom ${field} wajib diisi`);
+  const testResult = String(input.testResult), vehicleStatus = String(input.vehicleStatus || "Operasional");
+  if (!["Lulus", "Tidak Lulus"].includes(testResult)) throw new Error("Status hasil uji tidak valid");
+  if (!["Operasional", "Cadangan", "Rusak"].includes(vehicleStatus)) throw new Error("Status kendaraan tidak valid");
+  const lastTestDate = String(input.lastTestDate), validUntil = String(input.validUntil), vehicleYear = Number(input.vehicleYear);
+  if (validUntil < lastTestDate) throw new Error("Masa berlaku KIR tidak boleh sebelum tanggal uji terakhir");
+  if (vehicleYear && (vehicleYear < 1900 || vehicleYear > 2100)) throw new Error("Tahun kendaraan tidak valid");
+  await ensureDatabase();
+  const result = await db()`UPDATE kir_records SET vehicle_id = ${String(input.vehicleId)}, plate_number = ${String(input.plateNumber).trim()},
+    test_number = ${String(input.testNumber).trim()}, chassis_number = ${input.chassisNumber ? String(input.chassisNumber).trim() : null},
+    engine_number = ${input.engineNumber ? String(input.engineNumber).trim() : null}, vehicle_type = ${String(input.vehicleType).trim()},
+    brand_model = ${String(input.brandModel).trim()}, vehicle_year = ${vehicleYear || null}, test_result = ${testResult},
+    last_test_date = ${lastTestDate}, valid_until = ${validUntil}, driver_name = ${input.driverName ? String(input.driverName).trim() : null},
+    vehicle_status = ${vehicleStatus}, vehicle_location = ${input.vehicleLocation ? String(input.vehicleLocation).trim() : null},
+    next_test_date = ${validUntil} WHERE id = ${id} RETURNING id` as unknown as Array<{ id: string }>;
+  if (result.length === 0) throw new Error("Data KIR tidak ditemukan");
+  return { id, nextTestDate: validUntil };
+}
+
 export async function updateVehicle(id: string, input: Record<string, unknown>) {
   const status = String(input.status || "Tersedia");
   if (!["Tersedia", "Dipakai", "Servis", "Tidak Aktif"].includes(status)) throw new Error("Status kendaraan tidak valid");

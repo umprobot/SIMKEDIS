@@ -144,6 +144,23 @@ export async function updateManagedDriver(userId: string, input: Record<string, 
   const metadata = user.publicMetadata as { role?: unknown; active?: unknown };
   if (metadata.role !== "driver") throw new Error("Hanya akun driver yang dapat dikelola");
   const action = String(input.action ?? "");
+  if (action === "edit") {
+    const username = normalizedUsername(input.username);
+    const displayName = String(input.displayName ?? "").trim();
+    if (!displayName) throw new Error("Nama pengguna wajib diisi");
+    const newEmail = `${username}@${DRIVER_DOMAIN}`;
+    const currentEmail = user.primaryEmailAddress?.emailAddress.toLowerCase();
+    if (currentEmail !== newEmail) {
+      const existing = await client.users.getUserList({ emailAddress: [newEmail], limit: 1 });
+      if (existing.totalCount > 0) throw new Error("Username sudah digunakan");
+      await client.emailAddresses.createEmailAddress({ userId, emailAddress: newEmail, primary: true, verified: true });
+      const oldAddress = user.emailAddresses.find((address) => address.emailAddress.toLowerCase() === currentEmail);
+      if (oldAddress) await client.emailAddresses.deleteEmailAddress(oldAddress.id);
+    }
+    await client.users.updateUser(userId, { firstName: displayName });
+    await client.users.updateUserMetadata(userId, { publicMetadata: { ...metadata, username } });
+    return { id: userId, username, displayName };
+  }
   if (action === "reset-password") {
     await client.users.updateUser(userId, { password: DEFAULT_PASSWORD, skipPasswordChecks: true, signOutOfOtherSessions: true });
     return { passwordReset: true };
