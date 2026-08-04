@@ -1,28 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useSignIn } from "@clerk/nextjs";
 import Link from "next/link";
 
 export function DriverSignIn() {
   const { signIn, fetchStatus } = useSignIn();
   const [message, setMessage] = useState("");
-  const [pendingFinalize, setPendingFinalize] = useState(false);
-  const finalizing = useRef(false);
-
-  useEffect(() => {
-    if (!pendingFinalize || signIn.status !== "complete" || finalizing.current) return;
-    finalizing.current = true;
-
-    void signIn.finalize().then(({ error }) => {
-      if (error) throw error;
-      window.location.assign("/admin");
-    }).catch(() => {
-        finalizing.current = false;
-        setPendingFinalize(false);
-        setMessage("Login diterima, tetapi sesi belum dapat dibuat. Silakan coba kembali.");
-    });
-  }, [pendingFinalize, signIn]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,7 +21,11 @@ export function DriverSignIn() {
         if (code === "form_password_compromised" || code === "form_password_pwned") return setMessage("Password lama tidak aman. Hubungi admin untuk melakukan reset password.");
         return setMessage("Username atau password tidak sesuai.");
       }
-      setPendingFinalize(true);
+      const { error: finalizeError } = await signIn.finalize();
+      if (finalizeError) {
+        return setMessage("Login diterima, tetapi sesi belum dapat dibuat. Silakan coba kembali.");
+      }
+      window.location.assign("/admin");
     } catch {
       setMessage("Username atau password tidak sesuai.");
     }
