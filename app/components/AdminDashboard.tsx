@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import type { Driver, FuelRecord, LoanRequest, MaintenanceRecord, Vehicle } from "../../db/queries";
+import type { Driver, FuelRecord, KirRecord, LoanRequest, MaintenanceRecord, Vehicle } from "../../db/queries";
 
 type Data = {
   stats: { vehicles: number; available: number; service: number; pending: number; taxDue: number };
@@ -10,6 +10,7 @@ type Data = {
   drivers: Driver[];
   maintenance: MaintenanceRecord[];
   fuelRecords: FuelRecord[];
+  kirRecords: KirRecord[];
 };
 
 const tabs = ["Ringkasan", "Kendaraan", "Pengemudi", "Permohonan", "Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person"] as const;
@@ -23,6 +24,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
   const [showDriverForm, setShowDriverForm] = useState(false);
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
   const [showFuelForm, setShowFuelForm] = useState(false);
+  const [showKirForm, setShowKirForm] = useState(false);
   const [notice, setNotice] = useState("");
 
   const filteredVehicles = useMemo(() => data.vehicles.filter((vehicle) => {
@@ -66,6 +68,16 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Data pengisian BBM gagal disimpan.");
     setShowFuelForm(false);
+    window.location.reload();
+  }
+
+  async function addKir(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const response = await fetch("/api/kir", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) return setNotice(result.error ?? "Data KIR gagal disimpan.");
+    setShowKirForm(false);
     window.location.reload();
   }
 
@@ -119,11 +131,13 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
         {tab === "Pengemudi" && <DriversPanel drivers={data.drivers} onAdd={() => setShowDriverForm(true)} />}
         {tab === "Pemeliharaan" && <MaintenancePanel records={data.maintenance} onAdd={() => setShowMaintenanceForm(true)} />}
         {tab === "Bahan Bakar" && <FuelPanel records={data.fuelRecords} onAdd={() => setShowFuelForm(true)} />}
-        {(["Jadwal KIR", "Kontak Person"] as Tab[]).includes(tab) && <section className="admin-section admin-coming-soon"><span>SIMKEDIS</span><h2>Modul {tab}</h2><p>Navigasi sudah disiapkan mengikuti struktur pengelolaan kendaraan dinas. Data operasional modul ini dapat ditambahkan setelah format resminya diverifikasi.</p></section>}
+        {tab === "Jadwal KIR" && <KirPanel records={data.kirRecords} onAdd={() => setShowKirForm(true)} />}
+        {tab === "Kontak Person" && <section className="admin-section admin-coming-soon"><span>SIMKEDIS</span><h2>Modul {tab}</h2><p>Navigasi sudah disiapkan mengikuti struktur pengelolaan kendaraan dinas. Data operasional modul ini dapat ditambahkan setelah format resminya diverifikasi.</p></section>}
       </section>
       {showDriverForm && <DriverModal onClose={() => setShowDriverForm(false)} onSubmit={addDriver} />}
       {showMaintenanceForm && <MaintenanceModal vehicles={data.vehicles} onClose={() => setShowMaintenanceForm(false)} onSubmit={addMaintenance} />}
       {showFuelForm && <FuelModal vehicles={data.vehicles} onClose={() => setShowFuelForm(false)} onSubmit={addFuel} />}
+      {showKirForm && <KirModal vehicles={data.vehicles} drivers={data.drivers} onClose={() => setShowKirForm(false)} onSubmit={addKir} />}
     </main>
   );
 }
@@ -167,6 +181,26 @@ function FuelModal({ vehicles, onClose, onSubmit }: { vehicles: Vehicle[]; onClo
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driver-modal fuel-modal" role="dialog" aria-modal="true" aria-labelledby="fuel-modal-title"><header><h2 id="fuel-modal-title">Tambah Pengisian BBM</h2><button type="button" onClick={onClose} aria-label="Tutup formulir">×</button></header><form onSubmit={onSubmit}><div className="driver-form-grid"><label><span>Kendaraan *</span><select name="vehicleId" required defaultValue=""><option value="" disabled>-- Pilih Kendaraan --</option>{vehicles.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.plate_number} · {vehicle.brand} {vehicle.model}</option>)}</select></label><label><span>Tanggal</span><input name="fillDate" type="date" required defaultValue={today} /></label><label><span>Jenis BBM</span><select name="fuelType" defaultValue="Pertalite"><option>Pertalite</option><option>Pertamax</option><option>Pertamax Turbo</option><option>Dexlite</option><option>Pertamina Dex</option><option>Solar</option><option>Listrik</option><option>Lainnya</option></select></label><label><span>Lokasi SPBU</span><input name="station" placeholder="Pertamina Jl. Sudirman" /></label><label><span>Liter</span><input name="liters" type="number" min="0" step="0.01" value={liters} onChange={(event) => setLiters(event.target.value)} /></label><label><span>Harga / Liter (Rp)</span><input name="pricePerLiter" type="number" min="0" step="1" value={pricePerLiter} onChange={(event) => setPricePerLiter(event.target.value)} /></label><label><span>Kilometer</span><input name="odometer" type="number" min="0" step="1" defaultValue="0" /></label><label><span>URL Bukti Struk</span><input name="receiptUrl" type="url" placeholder="https://..." /></label><div className="fuel-total full-field"><span>Total Biaya:</span><strong>{formatRupiah(total)}</strong></div></div><footer><button className="button modal-cancel" type="button" onClick={onClose}>Batal</button><button className="button modal-save" type="submit">Simpan</button></footer></form></section></div>;
 }
 
+function KirPanel({ records, onAdd }: { records: KirRecord[]; onAdd: () => void }) {
+  const totals = {
+    aman: records.filter((record) => record.status_category === "Aman").length,
+    warning: records.filter((record) => record.status_category === "Warning").length,
+    expired: records.filter((record) => record.status_category === "Kedaluwarsa").length,
+  };
+  return <section className="admin-section"><div className="section-tools"><div><h2>Pemantauan Uji KIR</h2><p>Masa berlaku, jadwal pengujian berikutnya, dan status kelayakan kendaraan.</p></div><button className="button button-dark" onClick={onAdd}>+ Tambah Data KIR</button></div><div className="kir-summary"><article><span>Aman</span><strong>{totals.aman}</strong><small>Lebih dari 30 hari</small></article><article className="warning"><span>Warning</span><strong>{totals.warning}</strong><small>Jatuh tempo dalam 30 hari</small></article><article className="expired"><span>Kedaluwarsa</span><strong>{totals.expired}</strong><small>Perlu segera diuji</small></article></div>{records.length ? <div className="data-table-wrap"><table className="data-table kir-table"><thead><tr><th>Kendaraan</th><th>Dokumen KIR</th><th>Hasil Uji</th><th>Pengemudi</th><th>Operasional</th><th>Uji Terakhir</th><th>Jadwal Berikutnya</th><th>Sisa Berlaku</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td><strong>{record.brand_model}</strong><small>{record.plate_number} · {record.vehicle_type} {record.vehicle_year ?? ""}</small></td><td><code>{record.test_number}</code><small>Rangka: {record.chassis_number ?? "—"}<br />Mesin: {record.engine_number ?? "—"}</small></td><td><StatusPill value={record.test_result} /></td><td>{record.driver_name ?? "Belum ditetapkan"}</td><td><strong>{record.vehicle_status}</strong><small>{record.vehicle_location ?? "Lokasi belum diisi"}</small></td><td>{formatDate(record.last_test_date)}</td><td><strong>{formatDate(record.next_test_date)}</strong><small>Berlaku s.d. {formatDate(record.valid_until)}</small></td><td><StatusPill value={record.status_category} /><small className="remaining-days">{record.remaining_days < 0 ? `${Math.abs(record.remaining_days)} hari terlewat` : `${record.remaining_days} hari lagi`}</small></td></tr>)}</tbody></table></div> : <div className="empty-admin-state"><strong>Belum ada data Uji KIR</strong><p>Tambahkan dokumen dan jadwal KIR kendaraan melalui tombol di atas.</p></div>}</section>;
+}
+
+function KirModal({ vehicles, drivers, onClose, onSubmit }: { vehicles: Vehicle[]; drivers: Driver[]; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const sixMonthsLater = addMonths(today, 6);
+  const [vehicleId, setVehicleId] = useState("");
+  const [validUntil, setValidUntil] = useState(sixMonthsLater);
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === vehicleId);
+  const remainingDays = daysUntil(validUntil);
+  const category = kirCategory(remainingDays);
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driver-modal kir-modal" role="dialog" aria-modal="true" aria-labelledby="kir-modal-title"><header><h2 id="kir-modal-title">Tambah Data Uji KIR</h2><button type="button" onClick={onClose} aria-label="Tutup formulir">×</button></header><form onSubmit={onSubmit}><div className="driver-form-grid"><label className="full-field"><span>Pilih Kendaraan *</span><select name="vehicleId" required value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} autoFocus><option value="" disabled>-- Pilih Kendaraan --</option>{vehicles.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.plate_number} · {vehicle.brand} {vehicle.model}</option>)}</select></label><label><span>Nomor Polisi *</span><input key={`plate-${vehicleId}`} name="plateNumber" required defaultValue={selectedVehicle?.plate_number ?? ""} placeholder="AB 1234 XX" /></label><label><span>Nomor Uji KIR *</span><input name="testNumber" required placeholder="Nomor buku/sertifikat uji" /></label><label><span>Nomor Rangka</span><input key={`chassis-${vehicleId}`} name="chassisNumber" defaultValue={selectedVehicle?.chassis_number ?? ""} placeholder="Nomor rangka kendaraan" /></label><label><span>Nomor Mesin</span><input key={`engine-${vehicleId}`} name="engineNumber" defaultValue={selectedVehicle?.engine_number ?? ""} placeholder="Nomor mesin kendaraan" /></label><label><span>Jenis Kendaraan *</span><input key={`type-${vehicleId}`} name="vehicleType" list="kir-vehicle-types" required defaultValue={selectedVehicle?.body_type ?? ""} placeholder="Sedan, Bus, Truk..." /><datalist id="kir-vehicle-types"><option value="Sedan" /><option value="Bus" /><option value="Truk" /><option value="Pick Up" /><option value="Mini Bus" /><option value="Sepeda Motor" /></datalist></label><label><span>Merek / Model *</span><input key={`model-${vehicleId}`} name="brandModel" required defaultValue={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : ""} placeholder="Toyota Innova" /></label><label><span>Tahun Kendaraan</span><input key={`year-${vehicleId}`} name="vehicleYear" type="number" min="1900" max="2100" defaultValue={selectedVehicle?.year ?? ""} /></label><label><span>Status Hasil Uji *</span><select name="testResult" defaultValue="Lulus"><option>Lulus</option><option>Tidak Lulus</option></select></label><label><span>Tanggal Uji Terakhir *</span><input name="lastTestDate" type="date" required defaultValue={today} /></label><label><span>Masa Berlaku KIR *</span><input name="validUntil" type="date" required value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></label><label><span>Nama Pengemudi</span><select name="driverName" defaultValue=""><option value="">-- Belum ditetapkan --</option>{drivers.map((driver) => <option value={driver.name} key={driver.id}>{driver.name}</option>)}</select></label><label><span>Status Kendaraan</span><select name="vehicleStatus" defaultValue="Operasional"><option>Operasional</option><option>Cadangan</option><option>Rusak</option></select></label><label className="full-field"><span>Lokasi Kendaraan</span><input name="vehicleLocation" placeholder="Pool kendaraan / kantor" /></label><div className="kir-auto full-field"><div><span>Jadwal Uji Berikutnya</span><strong>{formatDate(validUntil)}</strong></div><div><span>Sisa Hari Berlaku</span><strong>{remainingDays < 0 ? `${Math.abs(remainingDays)} hari terlewat` : `${remainingDays} hari lagi`}</strong></div><StatusPill value={category} /></div></div><footer><button className="button modal-cancel" type="button" onClick={onClose}>Batal</button><button className="button modal-save" type="submit">Simpan</button></footer></form></section></div>;
+}
+
 function VehicleForm({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
   return <form className="vehicle-form" onSubmit={onSubmit}><label><span>Nomor polisi</span><input name="plateNumber" required /></label><label><span>Merek</span><input name="brand" required /></label><label><span>Model/tipe</span><input name="model" required /></label><label><span>Kategori</span><select name="category" required>{["Roda Dua", "Kendaraan Jabatan", "Layanan Tamu", "Operasional Biro"].map((v) => <option key={v}>{v}</option>)}</select></label><label><span>Jenis</span><input name="bodyType" placeholder="Sedan, Mini Bus…" /></label><label><span>Tahun</span><input name="year" type="number" min="1900" max="2100" /></label><label><span>Pengguna/unit</span><input name="assignee" /></label><label><span>Jatuh tempo pajak</span><input name="taxDueDate" type="date" /></label><label><span>Status</span><select name="status">{["Tersedia", "Dipakai", "Servis", "Tidak Aktif"].map((v) => <option key={v}>{v}</option>)}</select></label><label className="wide"><span>Keterangan</span><input name="notes" /></label><button className="button button-primary">Simpan kendaraan</button></form>;
 }
@@ -175,3 +209,6 @@ function StatusPill({ value }: { value: string }) { return <span className={`sta
 function slug(value: string) { return value.toLowerCase().replace(/[^a-z]+/g, "-").replace(/^-|-$/g, ""); }
 function formatDate(value: string | null) { return value ? new Date(`${value}T00:00:00`).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "Belum diisi"; }
 function formatRupiah(value: number) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value); }
+function addMonths(value: string, months: number) { const date = new Date(`${value}T00:00:00`); date.setMonth(date.getMonth() + months); return date.toISOString().slice(0, 10); }
+function daysUntil(value: string) { const today = new Date(); today.setHours(0, 0, 0, 0); const target = new Date(`${value}T00:00:00`); return Math.ceil((target.getTime() - today.getTime()) / 86400000); }
+function kirCategory(days: number): KirRecord["status_category"] { return days < 0 ? "Kedaluwarsa" : days <= 30 ? "Warning" : "Aman"; }

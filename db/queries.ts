@@ -9,6 +9,8 @@ export type Vehicle = {
   body_type: string | null;
   year: number | null;
   displacement: number | null;
+  chassis_number: string | null;
+  engine_number: string | null;
   assignee: string | null;
   usage: string | null;
   status: string;
@@ -78,6 +80,27 @@ export type FuelRecord = {
   total_cost: number;
 };
 
+export type KirRecord = {
+  id: string;
+  vehicle_id: string;
+  plate_number: string;
+  test_number: string;
+  chassis_number: string | null;
+  engine_number: string | null;
+  vehicle_type: string;
+  brand_model: string;
+  vehicle_year: number | null;
+  test_result: string;
+  last_test_date: string;
+  valid_until: string;
+  driver_name: string | null;
+  vehicle_status: string;
+  vehicle_location: string | null;
+  next_test_date: string;
+  remaining_days: number;
+  status_category: "Aman" | "Warning" | "Kedaluwarsa";
+};
+
 type DashboardData = {
   stats: { vehicles: number; available: number; service: number; pending: number; taxDue: number };
   vehicles: Vehicle[];
@@ -85,6 +108,7 @@ type DashboardData = {
   drivers: Driver[];
   maintenance: MaintenanceRecord[];
   fuelRecords: FuelRecord[];
+  kirRecords: KirRecord[];
 };
 
 let client: ReturnType<typeof neon> | null = null;
@@ -198,6 +222,27 @@ async function initialize() {
   )`;
   await sql`CREATE INDEX IF NOT EXISTS fuel_vehicle_idx ON fuel_records(vehicle_id)`;
   await sql`CREATE INDEX IF NOT EXISTS fuel_date_idx ON fuel_records(fill_date)`;
+  await sql`CREATE TABLE IF NOT EXISTS kir_records (
+    id TEXT PRIMARY KEY,
+    vehicle_id TEXT NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
+    plate_number TEXT NOT NULL,
+    test_number TEXT NOT NULL,
+    chassis_number TEXT,
+    engine_number TEXT,
+    vehicle_type TEXT NOT NULL,
+    brand_model TEXT NOT NULL,
+    vehicle_year INTEGER,
+    test_result TEXT NOT NULL,
+    last_test_date DATE NOT NULL,
+    valid_until DATE NOT NULL,
+    driver_name TEXT,
+    vehicle_status TEXT NOT NULL DEFAULT 'Operasional',
+    vehicle_location TEXT,
+    next_test_date DATE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`;
+  await sql`CREATE INDEX IF NOT EXISTS kir_vehicle_idx ON kir_records(vehicle_id)`;
+  await sql`CREATE INDEX IF NOT EXISTS kir_valid_until_idx ON kir_records(valid_until)`;
 
   const [{ total }] = await sql`SELECT COUNT(*)::int AS total FROM vehicles` as unknown as Array<{ total: number }>;
   if (total === 0) await seedDemoData();
@@ -252,6 +297,7 @@ export async function getPublicData() {
   const [stats, vehicles, drivers] = await Promise.all([
     getPublicStats(),
     sql`SELECT id, plate_number, brand, model, category, body_type, year, displacement,
+      chassis_number, engine_number,
       assignee, usage, status, tax_due_date::text, tax_amount::int, plate_renewal_year, notes
       FROM vehicles WHERE status = 'Tersedia' ORDER BY brand, model` as unknown as Promise<Vehicle[]>,
     sql`SELECT id, name, nip, position, unit, license_number, license_type,
@@ -264,8 +310,9 @@ export async function getPublicData() {
 export async function getDashboardData(): Promise<DashboardData> {
   await ensureDatabase();
   const sql = db();
-  const [vehicles, requests, drivers, maintenance, fuelRecords, totals] = await Promise.all([
+  const [vehicles, requests, drivers, maintenance, fuelRecords, kirRecords, totals] = await Promise.all([
     sql`SELECT id, plate_number, brand, model, category, body_type, year, displacement,
+      chassis_number, engine_number,
       assignee, usage, status, tax_due_date::text, tax_amount::int, plate_renewal_year, notes
       FROM vehicles ORDER BY category, brand, model` as unknown as Promise<Vehicle[]>,
     sql`SELECT id, applicant_name, unit, contact_phone, purpose, event_date::text,
@@ -283,6 +330,16 @@ export async function getDashboardData(): Promise<DashboardData> {
       f.odometer, f.receipt_url, f.total_cost::int
       FROM fuel_records f JOIN vehicles v ON v.id = f.vehicle_id
       ORDER BY f.fill_date DESC, f.created_at DESC` as unknown as Promise<FuelRecord[]>,
+    sql`SELECT id, vehicle_id, plate_number, test_number, chassis_number, engine_number,
+      vehicle_type, brand_model, vehicle_year, test_result, last_test_date::text,
+      valid_until::text, driver_name, vehicle_status, vehicle_location,
+      next_test_date::text, (valid_until - CURRENT_DATE)::int AS remaining_days,
+      CASE
+        WHEN valid_until < CURRENT_DATE THEN 'Kedaluwarsa'
+        WHEN valid_until <= CURRENT_DATE + 30 THEN 'Warning'
+        ELSE 'Aman'
+      END AS status_category
+      FROM kir_records ORDER BY valid_until, created_at DESC` as unknown as Promise<KirRecord[]>,
     sql`SELECT COUNT(*)::int AS vehicles,
       COUNT(*) FILTER (WHERE status = 'Tersedia')::int AS available,
       COUNT(*) FILTER (WHERE status = 'Servis')::int AS service,
@@ -302,6 +359,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     drivers,
     maintenance,
     fuelRecords,
+    kirRecords,
   };
 }
 
@@ -424,6 +482,37 @@ export async function createFuelRecord(input: Record<string, unknown>) {
     ${odometer}, ${receiptUrl}, ${totalCost}
   )`;
   return { id, totalCost };
+}
+
+export async function createKirRecord(input: Record<string, unknown>) {
+  for (const field of ["vehicleId", "plateNumber", "testNumber", "vehicleType", "brandModel", "testResult", "lastTestDate", "validUntil"]) {
+    if (typeof input[field] !== "string" || !input[field].trim()) throw new Error(`Kolom ${field} wajib diisi`);
+  }
+  const testResult = String(input.testResult);
+  if (!["Lulus", "Tidak Lulus"].includes(testResult)) throw new Error("Status hasil uji tidak valid");
+  const vehicleStatus = String(input.vehicleStatus || "Operasional");
+  if (!["Operasional", "Cadangan", "Rusak"].includes(vehicleStatus)) throw new Error("Status kendaraan tidak valid");
+  const lastTestDate = String(input.lastTestDate);
+  const validUntil = String(input.validUntil);
+  if (validUntil < lastTestDate) throw new Error("Masa berlaku KIR tidak boleh sebelum tanggal uji terakhir");
+  const vehicleYear = Number(input.vehicleYear);
+  if (vehicleYear && (vehicleYear < 1900 || vehicleYear > 2100)) throw new Error("Tahun kendaraan tidak valid");
+  await ensureDatabase();
+  const id = `KIR-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  await db()`INSERT INTO kir_records (
+    id, vehicle_id, plate_number, test_number, chassis_number, engine_number,
+    vehicle_type, brand_model, vehicle_year, test_result, last_test_date, valid_until,
+    driver_name, vehicle_status, vehicle_location, next_test_date
+  ) VALUES (
+    ${id}, ${String(input.vehicleId)}, ${String(input.plateNumber).trim()}, ${String(input.testNumber).trim()},
+    ${input.chassisNumber ? String(input.chassisNumber).trim() : null},
+    ${input.engineNumber ? String(input.engineNumber).trim() : null},
+    ${String(input.vehicleType).trim()}, ${String(input.brandModel).trim()}, ${vehicleYear || null},
+    ${testResult}, ${lastTestDate}, ${validUntil},
+    ${input.driverName ? String(input.driverName).trim() : null}, ${vehicleStatus},
+    ${input.vehicleLocation ? String(input.vehicleLocation).trim() : null}, ${validUntil}
+  )`;
+  return { id, nextTestDate: validUntil };
 }
 
 export async function updateVehicle(id: string, input: Record<string, unknown>) {
