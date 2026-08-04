@@ -5,20 +5,25 @@ import test from "node:test";
 const root = new URL("../", import.meta.url);
 
 test("contains public service, admin authentication, and API surfaces", async () => {
-  const [home, admin, auth, requestApi, kirApi] = await Promise.all([
+  const [home, admin, auth, requestApi, kirApi, usersApi] = await Promise.all([
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/admin/page.tsx", root), "utf8"),
     readFile(new URL("app/auth.ts", root), "utf8"),
     readFile(new URL("app/api/requests/route.ts", root), "utf8"),
     readFile(new URL("app/api/kir/route.ts", root), "utf8"),
+    readFile(new URL("app/api/users/route.ts", root), "utf8"),
   ]);
   assert.match(home, /Ajukan kendaraan/);
   assert.match(home, /PublicRequestForm/);
-  assert.match(admin, /requireAdminUser\("\/admin"\)/);
+  assert.match(admin, /requirePortalUser\("\/admin"\)/);
   assert.match(auth, /@clerk\/nextjs\/server/);
   assert.match(requestApi, /createLoanRequest/);
-  assert.match(kirApi, /getAdminUser/);
   assert.match(kirApi, /createKirRecord/);
+  assert.match(kirApi, /getOperatorUser/);
+  assert.match(usersApi, /getAdminUser/);
+  assert.match(usersApi, /createManagedDriver/);
+  assert.match(auth, /publicMetadata/);
+  assert.match(auth, /DEFAULT_DRIVERS/);
 });
 
 test("uses a lazy Neon client and initializes all core tables", async () => {

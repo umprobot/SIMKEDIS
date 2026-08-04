@@ -245,3 +245,27 @@ footer { max-width: 1320px; margin: 0 auto; padding: 42px 36px; border-top: 1px 
   .admin-sidebar { background: #fff; border-bottom: 1px solid #dfe7ef; }.admin-sidebar nav { padding-bottom: 2px; }.admin-sidebar nav button.active { color: #008e8a; background: #ebfaf8; }
   .modal-backdrop { padding: 16px; place-items: start center; }.driver-modal { max-height: calc(100vh - 32px); }.driver-modal form { padding: 20px 18px; }.driver-form-grid { grid-template-columns: 1fr; }.driver-form-grid .full-field { grid-column: auto; }.kir-summary { grid-template-columns: 1fr; }.kir-auto { grid-template-columns: 1fr; align-items: start; }
 }
+
+/* Readability and role-based account management */
+.admin-shell { grid-template-columns: 270px 1fr; }
+.admin-sidebar { padding: 24px 18px; }
+.admin-sidebar nav button { min-height: 46px; padding: 12px 13px; font-size: 14px; }
+.admin-sidebar nav button > span { font-size: 18px; }
+.admin-content { padding: 0 42px 64px; }
+.admin-header { height: 112px; margin-bottom: 30px; }
+.admin-header p { font-size: 11px; }.admin-header h1 { font-size: 34px; }
+.admin-user strong { font-size: 13px; }.admin-user small { font-size: 11px; }
+.admin-section { padding: 30px; }.section-tools { margin-bottom: 28px; }
+.panel-heading h2, .section-tools h2 { font-size: 24px; }.panel-heading p, .section-tools p { font-size: 13px; }
+.data-table { font-size: 13px; }.data-table th { padding: 13px 12px; font-size: 10px; }.data-table td { padding: 15px 12px; }.data-table td > strong { font-size: 13px; }.data-table td > small { margin-top: 4px; font-size: 11px; }.data-table code { font-size: 11px; }
+.status-pill { padding: 6px 9px; font-size: 10px; }.count-badge { font-size: 12px; }.button { font-size: 13px; }
+.request-admin-top code { font-size: 10px; }.request-admin-top h3 { font-size: 21px; }.request-admin-top p, .request-admin-card dt { font-size: 10px; }.request-admin-card dd { font-size: 13px; }
+.driver-grid h3 { font-size: 14px; }.driver-grid p { font-size: 12px; }.driver-grid article div small { font-size: 10px; }
+.account-security-note { margin: 0 0 20px; padding: 14px 16px; display: flex; flex-wrap: wrap; gap: 6px 14px; border: 1px solid #f0d99b; border-radius: 9px; background: #fff8e5; color: #785c16; font-size: 12px; }.account-security-note span { color: #887343; }
+.role-badge { display: inline-flex; padding: 6px 9px; border-radius: 99px; font-size: 10px; font-weight: 800; }.role-admin { color: #314f90; background: #e8efff; }.role-driver { color: #087c78; background: #e5f8f5; }
+.user-table { min-width: 920px; }.user-actions { display: flex; gap: 7px; }.user-actions button { padding: 7px 9px; border: 1px solid #cbd8e7; border-radius: 6px; background: #fff; color: #334155; cursor: pointer; font-size: 10px; font-weight: 750; }.user-actions button.deactivate { color: #a44338; border-color: #efcbc6; }.user-actions button.activate { color: #24704b; border-color: #b9dfca; }.admin-managed-note { color: #7b899b; font-size: 11px; }
+.driver-auth-shell { background: radial-gradient(circle at 20% 10%, #dff8f4, transparent 35%), #f4f7fa; }.driver-login-card { width: min(470px, 100%); padding: 38px; border: 1px solid #dbe5ec; border-radius: 18px; background: #fff; box-shadow: 0 24px 70px rgba(20,55,68,.12); }.login-brand { margin-bottom: 30px; display: flex; align-items: center; gap: 12px; }.login-brand .brand-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(90deg,#e44b3d 0 34%,#f6d13f 34% 67%,#259b5b 67%); color: #fff; }.login-brand div { display: flex; flex-direction: column; }.login-brand strong { color: #101c34; font-size: 15px; letter-spacing: .08em; }.login-brand small { margin-top: 3px; color: #8290a4; font-size: 11px; }.driver-login-card h1 { margin: 18px 0 8px; color: #101c34; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 30px; }.driver-login-card > p { margin: 0 0 24px; color: #64748b; font-size: 14px; line-height: 1.6; }.driver-login-card form { display: grid; gap: 17px; }.driver-login-card label { display: grid; gap: 7px; color: #34445d; font-size: 13px; font-weight: 750; }.driver-login-card input { min-height: 46px; padding: 11px 13px; border: 1px solid #cbd8e7; border-radius: 8px; background: #f8fafc; font-size: 14px; outline: none; }.driver-login-card input:focus { border-color: #079d98; box-shadow: 0 0 0 3px rgba(7,157,152,.1); }.driver-login-card form .button { min-height: 46px; margin-top: 4px; border: 0; border-radius: 8px; }.login-error { padding: 10px 12px; border-radius: 7px; background: #fee9e6; color: #9c3e35; font-size: 12px; }.default-account-note { margin-top: 20px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; border-radius: 8px; background: #f5f8fb; color: #526176; font-size: 11px; }.admin-login-link, .driver-login-back { display: block; margin-top: 22px; color: #078f8b; font-size: 12px; font-weight: 800; text-align: center; }.driver-login-back { margin: 0 0 14px; text-align: left; }
+
+@media (max-width: 760px) {
+  .admin-shell { display: block; }.admin-content { padding: 0 16px 40px; }.admin-section { padding: 20px 16px; }.admin-header h1 { font-size: 28px; }.driver-login-card { padding: 28px 22px; }.driver-login-card h1 { font-size: 25px; }
+}

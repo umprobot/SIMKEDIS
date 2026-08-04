@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import type { Driver, FuelRecord, KirRecord, LoanRequest, MaintenanceRecord, Vehicle } from "../../db/queries";
+import type { ManagedUser, PortalUser } from "../auth";
 
 type Data = {
   stats: { vehicles: number; available: number; service: number; pending: number; taxDue: number };
@@ -11,13 +12,16 @@ type Data = {
   maintenance: MaintenanceRecord[];
   fuelRecords: FuelRecord[];
   kirRecords: KirRecord[];
+  users: ManagedUser[];
 };
 
-const tabs = ["Ringkasan", "Kendaraan", "Pengemudi", "Permohonan", "Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person"] as const;
-type Tab = typeof tabs[number];
+const adminTabs = ["Ringkasan", "Kendaraan", "Pengemudi", "Permohonan", "Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person", "Pengelolaan User"] as const;
+const driverTabs = ["Pemeliharaan", "Bahan Bakar", "Jadwal KIR"] as const;
+type Tab = typeof adminTabs[number];
+const tabIcons: Record<Tab, string> = { Ringkasan: "▦", Kendaraan: "▱", Pengemudi: "♙", Permohonan: "▣", Pemeliharaan: "⌁", "Bahan Bakar": "▤", "Jadwal KIR": "▣", "Kontak Person": "☎", "Pengelolaan User": "♟" };
 
-export function AdminDashboard({ user, data, signOutPath }: { user: { displayName: string; email: string }; data: Data; signOutPath: string }) {
-  const [tab, setTab] = useState<Tab>("Ringkasan");
+export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; data: Data; signOutPath: string }) {
+  const [tab, setTab] = useState<Tab>(user.role === "driver" ? "Pemeliharaan" : "Ringkasan");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Semua");
   const [showForm, setShowForm] = useState(false);
@@ -25,7 +29,9 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
   const [showFuelForm, setShowFuelForm] = useState(false);
   const [showKirForm, setShowKirForm] = useState(false);
+  const [showUserForm, setShowUserForm] = useState(false);
   const [notice, setNotice] = useState("");
+  const visibleTabs: readonly Tab[] = user.role === "admin" ? adminTabs : driverTabs;
 
   const filteredVehicles = useMemo(() => data.vehicles.filter((vehicle) => {
     const matchesQuery = `${vehicle.plate_number} ${vehicle.brand} ${vehicle.model} ${vehicle.assignee ?? ""}`.toLowerCase().includes(query.toLowerCase());
@@ -81,6 +87,23 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
     window.location.reload();
   }
 
+  async function addUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const response = await fetch("/api/users", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))) });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) return setNotice(result.error ?? "Akun pengguna gagal dibuat.");
+    setShowUserForm(false);
+    window.location.reload();
+  }
+
+  async function manageUser(id: string, action: "reset-password" | "toggle-active") {
+    if (action === "reset-password" && !window.confirm("Reset password akun ini menjadi 123456?")) return;
+    const response = await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) });
+    const result = await response.json() as { error?: string };
+    if (!response.ok) return setNotice(result.error ?? "Akun pengguna gagal diperbarui.");
+    window.location.reload();
+  }
+
   async function changeVehicleStatus(vehicle: Vehicle, status: string) {
     const response = await fetch(`/api/vehicles/${vehicle.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({
       plateNumber: vehicle.plate_number, brand: vehicle.brand, model: vehicle.model, category: vehicle.category,
@@ -110,14 +133,14 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
   return (
     <main className="admin-shell">
       <aside className="admin-sidebar">
-        <div className="brand admin-brand"><span className="brand-mark">SK</span><span><strong>SIMKEDIS</strong><small>Panel Pengelola</small></span></div>
-        <nav>{tabs.map((item, index) => <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}><span>{["▦", "▱", "♙", "▣", "⌁", "▤", "▣", "☎"][index]}</span>{item === "Ringkasan" ? "Dashboard" : item}{item === "Permohonan" && data.stats.pending > 0 && <b>{data.stats.pending}</b>}</button>)}</nav>
+        <div className="brand admin-brand"><span className="brand-mark">SK</span><span><strong>SIMKEDIS</strong><small>{user.role === "admin" ? "Panel Pengelola" : "Portal Pengemudi"}</small></span></div>
+        <nav>{visibleTabs.map((item) => <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}><span>{tabIcons[item]}</span>{item === "Ringkasan" ? "Dashboard" : item}{item === "Permohonan" && data.stats.pending > 0 && <b>{data.stats.pending}</b>}</button>)}</nav>
         <div className="sidebar-help"><span>?</span><strong>Butuh bantuan?</strong><p>Gunakan data terverifikasi sebelum ditampilkan pada layanan publik.</p></div>
-        <a className="sidebar-signout" href={signOutPath}>Keluar dari admin <span>↗</span></a>
+        <a className="sidebar-signout" href={signOutPath}>Keluar dari akun <span>↗</span></a>
       </aside>
 
       <section className="admin-content">
-        <header className="admin-header"><div><p>Panel administrasi</p><h1>{tab}</h1></div><div className="admin-user"><span>{user.displayName.slice(0, 2).toUpperCase()}</span><div><strong>{user.displayName}</strong><small>{user.email}</small></div></div></header>
+        <header className="admin-header"><div><p>{user.role === "admin" ? "Panel administrasi" : "Portal operasional pengemudi"}</p><h1>{tab}</h1></div><div className="admin-user"><span>{user.displayName.slice(0, 2).toUpperCase()}</span><div><strong>{user.displayName}</strong><small>{user.role === "admin" ? "Administrator" : `Driver · ${user.username}`}</small></div></div></header>
         {notice && <div className="admin-notice" role="status">{notice}<button onClick={() => setNotice("")}>×</button></div>}
 
         {tab === "Ringkasan" && <Overview data={data} onOpenRequests={() => setTab("Permohonan")} />}
@@ -133,11 +156,13 @@ export function AdminDashboard({ user, data, signOutPath }: { user: { displayNam
         {tab === "Bahan Bakar" && <FuelPanel records={data.fuelRecords} onAdd={() => setShowFuelForm(true)} />}
         {tab === "Jadwal KIR" && <KirPanel records={data.kirRecords} onAdd={() => setShowKirForm(true)} />}
         {tab === "Kontak Person" && <section className="admin-section admin-coming-soon"><span>SIMKEDIS</span><h2>Modul {tab}</h2><p>Navigasi sudah disiapkan mengikuti struktur pengelolaan kendaraan dinas. Data operasional modul ini dapat ditambahkan setelah format resminya diverifikasi.</p></section>}
+        {tab === "Pengelolaan User" && user.role === "admin" && <UsersPanel users={data.users} onAdd={() => setShowUserForm(true)} onAction={manageUser} />}
       </section>
       {showDriverForm && <DriverModal onClose={() => setShowDriverForm(false)} onSubmit={addDriver} />}
       {showMaintenanceForm && <MaintenanceModal vehicles={data.vehicles} onClose={() => setShowMaintenanceForm(false)} onSubmit={addMaintenance} />}
       {showFuelForm && <FuelModal vehicles={data.vehicles} onClose={() => setShowFuelForm(false)} onSubmit={addFuel} />}
       {showKirForm && <KirModal vehicles={data.vehicles} drivers={data.drivers} onClose={() => setShowKirForm(false)} onSubmit={addKir} />}
+      {showUserForm && <UserModal onClose={() => setShowUserForm(false)} onSubmit={addUser} />}
     </main>
   );
 }
@@ -199,6 +224,14 @@ function KirModal({ vehicles, drivers, onClose, onSubmit }: { vehicles: Vehicle[
   const remainingDays = daysUntil(validUntil);
   const category = kirCategory(remainingDays);
   return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driver-modal kir-modal" role="dialog" aria-modal="true" aria-labelledby="kir-modal-title"><header><h2 id="kir-modal-title">Tambah Data Uji KIR</h2><button type="button" onClick={onClose} aria-label="Tutup formulir">×</button></header><form onSubmit={onSubmit}><div className="driver-form-grid"><label className="full-field"><span>Pilih Kendaraan *</span><select name="vehicleId" required value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} autoFocus><option value="" disabled>-- Pilih Kendaraan --</option>{vehicles.map((vehicle) => <option value={vehicle.id} key={vehicle.id}>{vehicle.plate_number} · {vehicle.brand} {vehicle.model}</option>)}</select></label><label><span>Nomor Polisi *</span><input key={`plate-${vehicleId}`} name="plateNumber" required defaultValue={selectedVehicle?.plate_number ?? ""} placeholder="AB 1234 XX" /></label><label><span>Nomor Uji KIR *</span><input name="testNumber" required placeholder="Nomor buku/sertifikat uji" /></label><label><span>Nomor Rangka</span><input key={`chassis-${vehicleId}`} name="chassisNumber" defaultValue={selectedVehicle?.chassis_number ?? ""} placeholder="Nomor rangka kendaraan" /></label><label><span>Nomor Mesin</span><input key={`engine-${vehicleId}`} name="engineNumber" defaultValue={selectedVehicle?.engine_number ?? ""} placeholder="Nomor mesin kendaraan" /></label><label><span>Jenis Kendaraan *</span><input key={`type-${vehicleId}`} name="vehicleType" list="kir-vehicle-types" required defaultValue={selectedVehicle?.body_type ?? ""} placeholder="Sedan, Bus, Truk..." /><datalist id="kir-vehicle-types"><option value="Sedan" /><option value="Bus" /><option value="Truk" /><option value="Pick Up" /><option value="Mini Bus" /><option value="Sepeda Motor" /></datalist></label><label><span>Merek / Model *</span><input key={`model-${vehicleId}`} name="brandModel" required defaultValue={selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : ""} placeholder="Toyota Innova" /></label><label><span>Tahun Kendaraan</span><input key={`year-${vehicleId}`} name="vehicleYear" type="number" min="1900" max="2100" defaultValue={selectedVehicle?.year ?? ""} /></label><label><span>Status Hasil Uji *</span><select name="testResult" defaultValue="Lulus"><option>Lulus</option><option>Tidak Lulus</option></select></label><label><span>Tanggal Uji Terakhir *</span><input name="lastTestDate" type="date" required defaultValue={today} /></label><label><span>Masa Berlaku KIR *</span><input name="validUntil" type="date" required value={validUntil} onChange={(event) => setValidUntil(event.target.value)} /></label><label><span>Nama Pengemudi</span><select name="driverName" defaultValue=""><option value="">-- Belum ditetapkan --</option>{drivers.map((driver) => <option value={driver.name} key={driver.id}>{driver.name}</option>)}</select></label><label><span>Status Kendaraan</span><select name="vehicleStatus" defaultValue="Operasional"><option>Operasional</option><option>Cadangan</option><option>Rusak</option></select></label><label className="full-field"><span>Lokasi Kendaraan</span><input name="vehicleLocation" placeholder="Pool kendaraan / kantor" /></label><div className="kir-auto full-field"><div><span>Jadwal Uji Berikutnya</span><strong>{formatDate(validUntil)}</strong></div><div><span>Sisa Hari Berlaku</span><strong>{remainingDays < 0 ? `${Math.abs(remainingDays)} hari terlewat` : `${remainingDays} hari lagi`}</strong></div><StatusPill value={category} /></div></div><footer><button className="button modal-cancel" type="button" onClick={onClose}>Batal</button><button className="button modal-save" type="submit">Simpan</button></footer></form></section></div>;
+}
+
+function UsersPanel({ users, onAdd, onAction }: { users: ManagedUser[]; onAdd: () => void; onAction: (id: string, action: "reset-password" | "toggle-active") => void }) {
+  return <section className="admin-section"><div className="section-tools"><div><h2>Pengelolaan pengguna</h2><p>Atur akun, peran, status akses, dan reset password pengemudi.</p></div><button className="button button-dark" onClick={onAdd}>+ Tambah User</button></div><div className="account-security-note"><strong>Password awal driver: 123456</strong><span>Segera ganti setelah akun diserahkan. Admin tetap masuk menggunakan email Clerk.</span></div><div className="data-table-wrap"><table className="data-table user-table"><thead><tr><th>Pengguna</th><th>Username</th><th>Peran</th><th>Status</th><th>Login Terakhir</th><th>Aksi</th></tr></thead><tbody>{users.map((account) => <tr key={account.id}><td><strong>{account.displayName}</strong><small>{account.role === "admin" ? account.email : "Akun operasional pengemudi"}</small></td><td><code>{account.username}</code></td><td><span className={`role-badge role-${account.role}`}>{account.role === "admin" ? "Administrator" : "Driver"}</span></td><td><StatusPill value={account.active ? "Aktif" : "Tidak Aktif"} /></td><td>{account.lastSignInAt ? new Date(account.lastSignInAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "Belum pernah"}</td><td>{account.role === "driver" ? <div className="user-actions"><button onClick={() => onAction(account.id, "reset-password")}>Reset Password</button><button className={account.active ? "deactivate" : "activate"} onClick={() => onAction(account.id, "toggle-active")}>{account.active ? "Nonaktifkan" : "Aktifkan"}</button></div> : <span className="admin-managed-note">Dikelola lewat Clerk</span>}</td></tr>)}</tbody></table></div></section>;
+}
+
+function UserModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="driver-modal user-modal" role="dialog" aria-modal="true" aria-labelledby="user-modal-title"><header><h2 id="user-modal-title">Tambah User Driver</h2><button type="button" onClick={onClose} aria-label="Tutup formulir">×</button></header><form onSubmit={onSubmit}><div className="driver-form-grid"><label><span>Nama Lengkap *</span><input name="displayName" required autoFocus placeholder="Nama pengemudi" /></label><label><span>Username *</span><input name="username" required minLength={3} maxLength={32} pattern="[a-z0-9._-]+" autoCapitalize="none" placeholder="nama singkat" /></label><label className="full-field"><span>Password Awal</span><input name="password" type="text" minLength={6} defaultValue="123456" /></label><div className="account-security-note full-field"><strong>Akses role Driver</strong><span>Hanya menu Pemeliharaan, Bahan Bakar, dan Jadwal KIR.</span></div></div><footer><button className="button modal-cancel" type="button" onClick={onClose}>Batal</button><button className="button modal-save" type="submit">Buat Akun</button></footer></form></section></div>;
 }
 
 function VehicleForm({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {

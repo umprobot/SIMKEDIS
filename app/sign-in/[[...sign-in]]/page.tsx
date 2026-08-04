@@ -1,8 +1,9 @@
 import { SignIn } from "@clerk/nextjs";
 import Link from "next/link";
 import { isClerkConfigured } from "../../auth";
+import { DriverSignIn } from "./driver-sign-in";
 
-export default function SignInPage() {
+export default async function SignInPage({ searchParams }: { searchParams: Promise<{ mode?: string }> }) {
   if (!isClerkConfigured()) {
     return (
       <main className="auth-shell">
@@ -16,5 +17,7 @@ export default function SignInPage() {
     );
   }
 
-  return <main className="auth-shell"><SignIn forceRedirectUrl="/admin" /></main>;
+  const { mode } = await searchParams;
+  if (mode === "admin") return <main className="auth-shell admin-auth-shell"><div><Link className="driver-login-back" href="/sign-in">← Login pengemudi</Link><SignIn forceRedirectUrl="/admin" withSignUp={false} /></div></main>;
+  return <main className="auth-shell driver-auth-shell"><DriverSignIn /></main>;
 }

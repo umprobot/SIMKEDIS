@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getAdminUser } from "../../auth";
+import { getOperatorUser } from "../../auth";
 import { createKirRecord } from "../../../db/queries";
 
 export async function POST(request: Request) {
-  if (!await getAdminUser()) return NextResponse.json({ error: "Login admin diperlukan" }, { status: 401 });
+  if (!await getOperatorUser()) return NextResponse.json({ error: "Login pengguna diperlukan" }, { status: 401 });
   try {
     const result = await createKirRecord(await request.json() as Record<string, unknown>);
     return NextResponse.json(result, { status: 201 });
