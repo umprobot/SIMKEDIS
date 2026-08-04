@@ -301,8 +301,16 @@ export async function getPublicData() {
       assignee, usage, status, tax_due_date::text, tax_amount::int, plate_renewal_year, notes
       FROM vehicles WHERE status = 'Tersedia' ORDER BY brand, model` as unknown as Promise<Vehicle[]>,
     sql`SELECT id, name, nip, position, unit, license_number, license_type,
-      license_expiry::text, phone, photo_url, address, assigned_vehicle, status FROM drivers
-      WHERE status = 'Tersedia' ORDER BY name` as unknown as Promise<Driver[]>,
+      license_expiry, phone, photo_url, address, assigned_vehicle, status
+      FROM (
+        SELECT DISTINCT ON (LOWER(TRIM(name)), COALESCE(NULLIF(TRIM(phone), ''), ''))
+          id, name, nip, position, unit, license_number, license_type,
+          license_expiry::text, phone, photo_url, address, assigned_vehicle, status, created_at
+        FROM drivers
+        WHERE status = 'Tersedia'
+        ORDER BY LOWER(TRIM(name)), COALESCE(NULLIF(TRIM(phone), ''), ''), created_at, id
+      ) AS unique_drivers
+      ORDER BY name` as unknown as Promise<Driver[]>,
   ]);
   return { stats, vehicles, drivers };
 }
@@ -408,7 +416,9 @@ export async function createVehicle(input: Record<string, unknown>) {
 
 export async function createDriver(input: Record<string, unknown>) {
   if (typeof input.name !== "string" || !input.name.trim()) throw new Error("Nama pengemudi wajib diisi");
-  const status = String(input.status || "Aktif");
+  const name = input.name.trim();
+  const phone = input.phone ? String(input.phone).trim() : null;
+  const status = String(input.status || "Tersedia");
   if (!["Aktif", "Tersedia", "Bertugas", "Tidak Aktif", "Libur"].includes(status)) throw new Error("Status pengemudi tidak valid");
   const photoUrl = input.photoUrl ? String(input.photoUrl).trim() : null;
   if (photoUrl) {
@@ -420,15 +430,20 @@ export async function createDriver(input: Record<string, unknown>) {
     }
   }
   await ensureDatabase();
+  const duplicates = await db()`SELECT id FROM drivers
+    WHERE LOWER(TRIM(name)) = ${name.toLowerCase()}
+      AND COALESCE(NULLIF(TRIM(phone), ''), '') = ${phone ?? ""}
+    LIMIT 1` as unknown as Array<{ id: string }>;
+  if (duplicates.length > 0) throw new Error("Pengemudi dengan nama dan nomor HP yang sama sudah terdaftar");
   const id = `DRV-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
   await db()`INSERT INTO drivers (
     id, name, nip, position, unit, license_number, license_type, license_expiry,
     phone, photo_url, address, status
   ) VALUES (
-    ${id}, ${String(input.name).trim()}, ${input.nip ? String(input.nip).trim() : null},
+    ${id}, ${name}, ${input.nip ? String(input.nip).trim() : null},
     ${input.position ? String(input.position).trim() : null}, ${input.unit ? String(input.unit).trim() : null},
     ${input.licenseNumber ? String(input.licenseNumber).trim() : null}, ${input.licenseType ? String(input.licenseType) : null},
-    ${input.licenseExpiry ? String(input.licenseExpiry) : null}, ${input.phone ? String(input.phone).trim() : null},
+    ${input.licenseExpiry ? String(input.licenseExpiry) : null}, ${phone},
     ${photoUrl}, ${input.address ? String(input.address).trim() : null}, ${status}
   )`;
   return { id };

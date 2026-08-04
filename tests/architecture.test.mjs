@@ -37,5 +37,7 @@ test("uses a lazy Neon client and initializes all core tables", async () => {
   for (const table of ["vehicles", "loan_requests", "drivers", "maintenance_records", "fuel_records", "kir_records"]) {
     assert.match(database, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   }
+  assert.match(database, /SELECT DISTINCT ON/);
+  assert.match(database, /sudah terdaftar/);
   await assert.rejects(access(new URL(".env", root)));
 });
