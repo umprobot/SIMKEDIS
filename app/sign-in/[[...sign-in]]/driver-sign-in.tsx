@@ -21,8 +21,8 @@ export function DriverSignIn() {
         if (code === "form_password_compromised" || code === "form_password_pwned") return setMessage("Password lama tidak aman. Hubungi admin untuk melakukan reset password.");
         return setMessage("Username atau password tidak sesuai.");
       }
-      if (signIn.status !== "complete") return setMessage("Username atau password tidak sesuai.");
-      await signIn.finalize({ navigate: ({ decorateUrl }) => { window.location.assign(decorateUrl("/admin")); } });
+      const { error: finalizeError } = await signIn.finalize({ navigate: ({ decorateUrl }) => { window.location.assign(decorateUrl("/admin")); } });
+      if (finalizeError) setMessage("Login diterima, tetapi sesi belum dapat dibuat. Silakan coba kembali.");
     } catch {
       setMessage("Username atau password tidak sesuai.");
     }
