@@ -16,7 +16,8 @@ test("contains public service, admin authentication, and API surfaces", async ()
   ]);
   assert.match(home, /Ajukan kendaraan/);
   assert.match(home, /PublicRequestForm/);
-  assert.match(admin, /requirePortalUser\("\/admin"\)/);
+  assert.match(admin, /requirePortalUser/);
+  assert.match(admin, /initialTab/);
   assert.match(auth, /@clerk\/nextjs\/server/);
   assert.match(requestApi, /createLoanRequest/);
   assert.match(kirApi, /createKirRecord/);

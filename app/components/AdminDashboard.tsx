@@ -17,11 +17,12 @@ type Data = {
 
 const adminTabs = ["Ringkasan", "Kendaraan", "Pengemudi", "Permohonan", "Pemeliharaan", "Bahan Bakar", "Jadwal KIR", "Kontak Person", "Pengelolaan User"] as const;
 const driverTabs = ["Pemeliharaan", "Bahan Bakar", "Jadwal KIR"] as const;
-type Tab = typeof adminTabs[number];
+export type AdminTab = typeof adminTabs[number];
+type Tab = AdminTab;
 const tabIcons: Record<Tab, string> = { Ringkasan: "▦", Kendaraan: "▱", Pengemudi: "♙", Permohonan: "▣", Pemeliharaan: "⌁", "Bahan Bakar": "▤", "Jadwal KIR": "▣", "Kontak Person": "☎", "Pengelolaan User": "♟" };
 
-export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; data: Data; signOutPath: string }) {
-  const [tab, setTab] = useState<Tab>(user.role === "driver" ? "Pemeliharaan" : "Ringkasan");
+export function AdminDashboard({ user, data, initialTab, signOutPath }: { user: PortalUser; data: Data; initialTab: AdminTab; signOutPath: string }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Semua");
   const [showForm, setShowForm] = useState(false);
@@ -35,6 +36,10 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
   const [notice, setNotice] = useState("");
   const visibleTabs: readonly Tab[] = user.role === "admin" ? adminTabs : driverTabs;
 
+  function reloadCurrentTab() {
+    window.location.assign(`/admin?tab=${encodeURIComponent(tab)}`);
+  }
+
   const filteredVehicles = useMemo(() => data.vehicles.filter((vehicle) => {
     const matchesQuery = `${vehicle.plate_number} ${vehicle.brand} ${vehicle.model} ${vehicle.assignee ?? ""}`.toLowerCase().includes(query.toLowerCase());
     return matchesQuery && (category === "Semua" || vehicle.category === category);
@@ -46,7 +51,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
     const response = await fetch("/api/vehicles", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(Object.fromEntries(new FormData(form))) });
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Data kendaraan gagal disimpan.");
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   async function addDriver(event: FormEvent<HTMLFormElement>) {
@@ -56,7 +61,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Data pengemudi gagal disimpan.");
     setShowDriverForm(false);
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   async function addMaintenance(event: FormEvent<HTMLFormElement>) {
@@ -66,7 +71,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Data pemeliharaan gagal disimpan.");
     setShowMaintenanceForm(false);
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   async function addFuel(event: FormEvent<HTMLFormElement>) {
@@ -76,7 +81,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Data pengisian BBM gagal disimpan.");
     setShowFuelForm(false);
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   async function addKir(event: FormEvent<HTMLFormElement>) {
@@ -86,7 +91,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Data KIR gagal disimpan.");
     setShowKirForm(false);
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   async function addUser(event: FormEvent<HTMLFormElement>) {
@@ -95,7 +100,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Akun pengguna gagal dibuat.");
     setShowUserForm(false);
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   async function manageUser(id: string, action: "reset-password" | "toggle-active") {
@@ -103,7 +108,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
     const response = await fetch(`/api/users/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action }) });
     const result = await response.json() as { error?: string };
     if (!response.ok) return setNotice(result.error ?? "Akun pengguna gagal diperbarui.");
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   async function changeVehicleStatus(vehicle: Vehicle, status: string) {
@@ -114,7 +119,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
       plateRenewalYear: vehicle.plate_renewal_year, notes: vehicle.notes,
     }) });
     if (!response.ok) return setNotice("Status kendaraan gagal diperbarui.");
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   async function changeDriverStatus(driver: Driver, status: "Tersedia" | "Bertugas") {
@@ -131,7 +136,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
     if (!window.confirm(`Hapus ${vehicle.brand} ${vehicle.model} (${vehicle.plate_number})?`)) return;
     const response = await fetch(`/api/vehicles/${vehicle.id}`, { method: "DELETE" });
     if (!response.ok) return setNotice("Kendaraan belum dapat dihapus.");
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   async function decideRequest(request: LoanRequest, status: "Disetujui" | "Ditolak") {
@@ -139,7 +144,7 @@ export function AdminDashboard({ user, data, signOutPath }: { user: PortalUser; 
     const vehicleId = status === "Disetujui" ? (selector?.value || null) : null;
     const response = await fetch(`/api/requests/${request.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status, vehicleId }) });
     if (!response.ok) return setNotice("Status permohonan belum dapat diperbarui.");
-    window.location.reload();
+    reloadCurrentTab();
   }
 
   return (
